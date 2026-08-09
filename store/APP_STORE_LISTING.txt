@@ -1,0 +1,65 @@
+# Abroadster — App Store Connect listing copy (paste into ASC)
+
+## Name
+Abroadster
+
+## Subtitle (30 chars max)
+Study abroad, together
+
+## Promotional Text (170 chars, optional)
+Meet study-abroad students, join trips, share albums, and stay connected on a map built for life abroad.
+
+## Description
+Abroadster is the social map for students studying abroad.
+
+Find classmates and friends nearby, plan trips together, share albums from every city, and stay in the loop with DMs and school community chats.
+
+• See friends on the map when they choose to share
+• Create and lock in group trips
+• Follow trip albums and stamp posts
+• Message friends and join school communities
+• Build your passport as you explore
+
+Abroadster is made for university students living and traveling abroad.
+
+## Keywords (100 chars, comma-separated, no spaces after commas ideally)
+study abroad,student travel,exchange,map,trips,albums,friends,university,abroad,passport
+
+## Support URL
+mailto:support@abroadster.com
+(or your hosted support page once available)
+
+## Marketing URL (optional)
+(leave blank until you have a marketing site)
+
+Privacy Policy URL (REQUIRED — paste this into App Store Connect):
+https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/privacy.html
+
+Terms of Use URL (optional but recommended):
+https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/terms.html
+
+## Category
+Primary: Social Networking
+Secondary: Travel
+
+## Age Rating
+13+
+Not Kids Category
+No unrestricted web access intended for kids
+Mild user-generated content (social)
+
+## App Privacy (nutrition labels) — answer based on real behavior
+Data Linked to You:
+• Contact Info (email / phone for account)
+• User Content (posts, messages, photos, trip details)
+• Identifiers (account id / push token)
+• Location (approximate / precise when permission granted — used for map)
+• Usage Data (app interactions for notifications)
+
+Tracking: No (NSPrivacyTracking false; no ATT)
+
+## Review Notes
+Demo account: create a fresh account in-app (email/password signup).
+Account deletion: Profile → menu → Delete account.
+Push notifications and location are requested during signup.
+Test with two accounts for trip invites, join requests, stamps, and DMs.

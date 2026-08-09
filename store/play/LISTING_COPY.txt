@@ -1,0 +1,33 @@
+# Abroadster — Google Play listing copy (paste)
+
+## Short description (80 chars)
+Meet study-abroad students, plan trips, and share albums abroad.
+
+## Full description
+Abroadster is the social map for students studying abroad.
+
+Find classmates and friends nearby, plan trips together, share albums from every city, and stay in the loop with DMs and school community chats.
+
+• See friends on the map based on your study-abroad city
+• Create and lock in group trips
+• Follow trip albums and share posts
+• Message friends and join school community chats
+• Build your passport as you explore
+
+Abroadster is made for university students living and traveling abroad.
+
+Support: support@abroadster.com
+
+## URLs
+Privacy: https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/privacy.html
+Terms: https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/terms.html
+Delete account: https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/delete-account.html
+
+## Category
+Primary: Social
+Secondary: Travel & Local
+
+## Assets
+- Icon: ../../assets/icon.png
+- Feature graphic: ./feature-graphic.png
+- Screenshots: put phone screenshots in ./screenshots/

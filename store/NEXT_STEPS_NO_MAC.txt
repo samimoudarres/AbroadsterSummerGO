@@ -1,0 +1,87 @@
+Abroadster — what YOU still do for App Store (no MacBook required for most of this)
+
+============================================================
+A) ONE interactive terminal command (Apple login) — REQUIRED
+============================================================
+In Cursor terminal, project folder:
+
+  $env:EXPO_TOKEN="(your expo token from .env)"
+  $env:EAS_NO_VCS="1"
+  npx eas-cli@latest build --platform ios --profile production
+
+When asked:
+  1. Log in with your Apple Developer Apple ID
+  2. Select your Team
+  3. Let Expo generate Distribution Certificate + Provisioning Profile (YES)
+  4. Wait for the cloud iOS build (~15–25 min)
+
+You do NOT need your Mac for this — EAS builds on Expo’s Macs.
+
+After it finishes, open the build page and confirm status = Finished.
+
+
+============================================================
+B) App Store Connect (browser on any PC) — REQUIRED
+============================================================
+1. Go to https://appstoreconnect.apple.com
+2. My Apps → + → New App
+   - Platforms: iOS
+   - Name: Abroadster
+   - Bundle ID: com.abroadster.app  (create it in Certificates/Identifiers if missing)
+   - SKU: abroadster-ios-001
+3. Paste listing text from: store/APP_STORE_LISTING.txt
+4. Privacy Policy URL (paste exactly):
+   https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/privacy.html
+5. Upload screenshots (see section D)
+6. Upload 1024×1024 marketing icon (same as assets/app-icon-1024.png)
+7. Age rating questionnaire → 13+
+8. App Privacy answers → see store/APP_STORE_LISTING.txt
+
+
+============================================================
+C) Submit the IPA from Windows — NO MAC
+============================================================
+After the iOS build finishes:
+
+  $env:EXPO_TOKEN="..."
+  $env:EAS_NO_VCS="1"
+  npx eas-cli@latest submit --platform ios --latest --profile production
+
+Follow prompts to pick the App Store Connect app.
+Then in ASC: select the build → Add for Review → Submit.
+
+
+============================================================
+D) Screenshots (can do without Mac)
+============================================================
+Options:
+  - Record from your Android preview build / Expo web and crop to iPhone sizes
+  - Use a design tool to frame UI into iPhone 6.7" and 6.1" templates
+  - Later on MacBook: Simulator screenshots (optional)
+
+Required typical sizes ASC will ask for:
+  - 6.7" (iPhone 15 Pro Max class)
+  - Often also 6.1"
+
+
+============================================================
+E) Only if you want Xcode later (OPTIONAL)
+============================================================
+MacBook is optional for:
+  - Local debugging with Instruments
+  - Capturing Simulator screenshots
+NOT required for build or submit when using EAS.
+
+
+============================================================
+Already done in the project for you
+============================================================
+✓ Real 1024×1024 app icon + splash + Android adaptive icons
+✓ Privacy Manifests in app.json
+✓ Production env on EAS (Supabase, Mapbox, DEMO_SEED=0, legal URL)
+✓ Fake map seed users disabled in production builds
+✓ Account deletion + in-app Terms/Privacy
+✓ Public Privacy Policy + Terms hosted
+✓ Listing copy drafted in store/APP_STORE_LISTING.txt
+✓ Android preview build already submitted earlier
+✓ Push/projectId linked to Expo

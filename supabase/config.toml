@@ -1,0 +1,7 @@
+project_id = "ajwnvwvpvasxkwpfdsvo"
+
+[functions.create-phone-account]
+verify_jwt = false
+
+[functions.create-account]
+verify_jwt = false

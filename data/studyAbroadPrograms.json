@@ -1,0 +1,1123 @@
+[
+  {
+    "slug": "ciee-paris",
+    "name": "CIEE Paris",
+    "shortName": "CIEE Paris",
+    "provider": "CIEE",
+    "city": "Paris",
+    "country": "France",
+    "latitude": 48.8738,
+    "longitude": 2.295,
+    "address": "Paris, France",
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ies-paris",
+    "name": "IES Paris",
+    "shortName": "IES Paris",
+    "provider": "IES Abroad",
+    "city": "Paris",
+    "country": "France",
+    "latitude": 48.846,
+    "longitude": 2.37,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "nyu-paris",
+    "name": "NYU Paris",
+    "shortName": "NYU Paris",
+    "provider": "NYU",
+    "city": "Paris",
+    "country": "France",
+    "latitude": 48.8495,
+    "longitude": 2.343,
+    "domains": [
+      "nyu.edu"
+    ],
+    "accentHex": "#57068C"
+  },
+  {
+    "slug": "cea-paris",
+    "name": "CEA CAPA Paris",
+    "shortName": "CEA Paris",
+    "provider": "CEA CAPA",
+    "city": "Paris",
+    "country": "France",
+    "latitude": 48.8606,
+    "longitude": 2.3376,
+    "domains": [
+      "ceastudyabroad.com"
+    ],
+    "accentHex": "#00A3E0"
+  },
+  {
+    "slug": "api-paris",
+    "name": "API Paris",
+    "shortName": "API Paris",
+    "provider": "API",
+    "city": "Paris",
+    "country": "France",
+    "latitude": 48.8566,
+    "longitude": 2.3522,
+    "domains": [
+      "apistudyabroad.com"
+    ],
+    "accentHex": "#C8102E"
+  },
+  {
+    "slug": "aifs-paris",
+    "name": "AIFS Paris",
+    "shortName": "AIFS Paris",
+    "provider": "AIFS",
+    "city": "Paris",
+    "country": "France",
+    "latitude": 48.8648,
+    "longitude": 2.32,
+    "domains": [
+      "aifsabroad.com"
+    ],
+    "accentHex": "#0033A0"
+  },
+  {
+    "slug": "nyu-london",
+    "name": "NYU in London",
+    "shortName": "NYU London",
+    "provider": "NYU",
+    "city": "London",
+    "country": "United Kingdom",
+    "latitude": 51.5155,
+    "longitude": -0.141,
+    "domains": [
+      "nyu.edu"
+    ],
+    "accentHex": "#9B51E0"
+  },
+  {
+    "slug": "syracuse-london",
+    "name": "Syracuse London",
+    "shortName": "Syrac London",
+    "provider": "Syracuse Abroad",
+    "city": "London",
+    "country": "United Kingdom",
+    "latitude": 51.511,
+    "longitude": -0.125,
+    "domains": [
+      "syr.edu"
+    ],
+    "accentHex": "#F76900"
+  },
+  {
+    "slug": "ciee-london",
+    "name": "CIEE London",
+    "shortName": "CIEE London",
+    "provider": "CIEE",
+    "city": "London",
+    "country": "United Kingdom",
+    "latitude": 51.5074,
+    "longitude": -0.1278,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ies-london",
+    "name": "IES London",
+    "shortName": "IES London",
+    "provider": "IES Abroad",
+    "city": "London",
+    "country": "United Kingdom",
+    "latitude": 51.52,
+    "longitude": -0.14,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "cea-london",
+    "name": "CEA CAPA London",
+    "shortName": "CEA London",
+    "provider": "CEA CAPA",
+    "city": "London",
+    "country": "United Kingdom",
+    "latitude": 51.513,
+    "longitude": -0.12,
+    "domains": [
+      "ceastudyabroad.com"
+    ],
+    "accentHex": "#00A3E0"
+  },
+  {
+    "slug": "nyu-florence",
+    "name": "NYU Florence",
+    "shortName": "NYU Florence",
+    "provider": "NYU",
+    "city": "Florence",
+    "country": "Italy",
+    "latitude": 43.7696,
+    "longitude": 11.2558,
+    "domains": [
+      "nyu.edu"
+    ],
+    "accentHex": "#57068C"
+  },
+  {
+    "slug": "syracuse-florence",
+    "name": "Syracuse Florence",
+    "shortName": "Syracuse Florence",
+    "provider": "Syracuse Abroad",
+    "city": "Florence",
+    "country": "Italy",
+    "latitude": 43.7731,
+    "longitude": 11.256,
+    "domains": [
+      "syr.edu"
+    ],
+    "accentHex": "#F76900"
+  },
+  {
+    "slug": "ciee-rome",
+    "name": "CIEE Rome",
+    "shortName": "CIEE Rome",
+    "provider": "CIEE",
+    "city": "Rome",
+    "country": "Italy",
+    "latitude": 41.9028,
+    "longitude": 12.4964,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "temple-rome",
+    "name": "Temple Rome",
+    "shortName": "Temple Rome",
+    "provider": "Temple University",
+    "city": "Rome",
+    "country": "Italy",
+    "latitude": 41.903,
+    "longitude": 12.48,
+    "domains": [
+      "temple.edu"
+    ],
+    "accentHex": "#9E1B32"
+  },
+  {
+    "slug": "ies-rome",
+    "name": "IES Rome",
+    "shortName": "IES Rome",
+    "provider": "IES Abroad",
+    "city": "Rome",
+    "country": "Italy",
+    "latitude": 41.9,
+    "longitude": 12.49,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "ies-milan",
+    "name": "IES Milan",
+    "shortName": "IES Milan",
+    "provider": "IES Abroad",
+    "city": "Milan",
+    "country": "Italy",
+    "latitude": 45.4642,
+    "longitude": 9.19,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "cea-florence",
+    "name": "CEA CAPA Florence",
+    "shortName": "CEA Florence",
+    "provider": "CEA CAPA",
+    "city": "Florence",
+    "country": "Italy",
+    "latitude": 43.771,
+    "longitude": 11.254,
+    "domains": [
+      "ceastudyabroad.com"
+    ],
+    "accentHex": "#00A3E0"
+  },
+  {
+    "slug": "cea-barcelona",
+    "name": "CEA Barcelona",
+    "shortName": "CEA Barcelona",
+    "provider": "CEA CAPA",
+    "city": "Barcelona",
+    "country": "Spain",
+    "latitude": 41.3874,
+    "longitude": 2.1686,
+    "domains": [
+      "ceastudyabroad.com"
+    ],
+    "accentHex": "#00A3E0"
+  },
+  {
+    "slug": "ciee-barcelona",
+    "name": "CIEE Barcelona",
+    "shortName": "CIEE Barcelona",
+    "provider": "CIEE",
+    "city": "Barcelona",
+    "country": "Spain",
+    "latitude": 41.3851,
+    "longitude": 2.1734,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ies-barcelona",
+    "name": "IES Barcelona",
+    "shortName": "IES Barcelona",
+    "provider": "IES Abroad",
+    "city": "Barcelona",
+    "country": "Spain",
+    "latitude": 41.39,
+    "longitude": 2.17,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "nyu-madrid",
+    "name": "NYU Madrid",
+    "shortName": "NYU Madrid",
+    "provider": "NYU",
+    "city": "Madrid",
+    "country": "Spain",
+    "latitude": 40.4168,
+    "longitude": -3.7038,
+    "domains": [
+      "nyu.edu"
+    ],
+    "accentHex": "#57068C"
+  },
+  {
+    "slug": "ciee-madrid",
+    "name": "CIEE Madrid",
+    "shortName": "CIEE Madrid",
+    "provider": "CIEE",
+    "city": "Madrid",
+    "country": "Spain",
+    "latitude": 40.42,
+    "longitude": -3.7,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "api-seville",
+    "name": "API Seville",
+    "shortName": "API Seville",
+    "provider": "API",
+    "city": "Seville",
+    "country": "Spain",
+    "latitude": 37.3891,
+    "longitude": -5.9845,
+    "domains": [
+      "apistudyabroad.com"
+    ],
+    "accentHex": "#C8102E"
+  },
+  {
+    "slug": "nyu-berlin",
+    "name": "NYU Berlin",
+    "shortName": "NYU Berlin",
+    "provider": "NYU",
+    "city": "Berlin",
+    "country": "Germany",
+    "latitude": 52.52,
+    "longitude": 13.405,
+    "domains": [
+      "nyu.edu"
+    ],
+    "accentHex": "#57068C"
+  },
+  {
+    "slug": "ciee-berlin",
+    "name": "CIEE Berlin",
+    "shortName": "CIEE Berlin",
+    "provider": "CIEE",
+    "city": "Berlin",
+    "country": "Germany",
+    "latitude": 52.515,
+    "longitude": 13.39,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ies-berlin",
+    "name": "IES Berlin",
+    "shortName": "IES Berlin",
+    "provider": "IES Abroad",
+    "city": "Berlin",
+    "country": "Germany",
+    "latitude": 52.51,
+    "longitude": 13.4,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "ies-amsterdam",
+    "name": "IES Amsterdam",
+    "shortName": "IES Amsterdam",
+    "provider": "IES Abroad",
+    "city": "Amsterdam",
+    "country": "Netherlands",
+    "latitude": 52.3676,
+    "longitude": 4.9041,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "ciee-amsterdam",
+    "name": "CIEE Amsterdam",
+    "shortName": "CIEE Amsterdam",
+    "provider": "CIEE",
+    "city": "Amsterdam",
+    "country": "Netherlands",
+    "latitude": 52.37,
+    "longitude": 4.895,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "dis-copenhagen",
+    "name": "DIS Copenhagen",
+    "shortName": "DIS Copenhagen",
+    "provider": "DIS",
+    "city": "Copenhagen",
+    "country": "Denmark",
+    "latitude": 55.6761,
+    "longitude": 12.5683,
+    "domains": [
+      "disabroad.org"
+    ],
+    "accentHex": "#E31837"
+  },
+  {
+    "slug": "dis-stockholm",
+    "name": "DIS Stockholm",
+    "shortName": "DIS Stockholm",
+    "provider": "DIS",
+    "city": "Stockholm",
+    "country": "Sweden",
+    "latitude": 59.3293,
+    "longitude": 18.0686,
+    "domains": [
+      "disabroad.org"
+    ],
+    "accentHex": "#E31837"
+  },
+  {
+    "slug": "ciee-prague",
+    "name": "CIEE Prague",
+    "shortName": "CIEE Prague",
+    "provider": "CIEE",
+    "city": "Prague",
+    "country": "Czech Republic",
+    "latitude": 50.0755,
+    "longitude": 14.4378,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "cea-prague",
+    "name": "CEA CAPA Prague",
+    "shortName": "CEA Prague",
+    "provider": "CEA CAPA",
+    "city": "Prague",
+    "country": "Czech Republic",
+    "latitude": 50.08,
+    "longitude": 14.42,
+    "domains": [
+      "ceastudyabroad.com"
+    ],
+    "accentHex": "#00A3E0"
+  },
+  {
+    "slug": "ciee-budapest",
+    "name": "CIEE Budapest",
+    "shortName": "CIEE Budapest",
+    "provider": "CIEE",
+    "city": "Budapest",
+    "country": "Hungary",
+    "latitude": 47.4979,
+    "longitude": 19.0402,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ciee-dublin",
+    "name": "CIEE Dublin",
+    "shortName": "CIEE Dublin",
+    "provider": "CIEE",
+    "city": "Dublin",
+    "country": "Ireland",
+    "latitude": 53.3498,
+    "longitude": -6.2603,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ies-dublin",
+    "name": "IES Dublin",
+    "shortName": "IES Dublin",
+    "provider": "IES Abroad",
+    "city": "Dublin",
+    "country": "Ireland",
+    "latitude": 53.34,
+    "longitude": -6.26,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "ciee-athens",
+    "name": "CIEE Athens",
+    "shortName": "CIEE Athens",
+    "provider": "CIEE",
+    "city": "Athens",
+    "country": "Greece",
+    "latitude": 37.9838,
+    "longitude": 23.7275,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ciee-buenos-aires",
+    "name": "CIEE Buenos Aires",
+    "shortName": "CIEE BA",
+    "provider": "CIEE",
+    "city": "Buenos Aires",
+    "country": "Argentina",
+    "latitude": -34.6037,
+    "longitude": -58.3816,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ies-buenos-aires",
+    "name": "IES Buenos Aires",
+    "shortName": "IES BA",
+    "provider": "IES Abroad",
+    "city": "Buenos Aires",
+    "country": "Argentina",
+    "latitude": -34.6,
+    "longitude": -58.38,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "ciee-santiago",
+    "name": "CIEE Santiago",
+    "shortName": "CIEE Santiago",
+    "provider": "CIEE",
+    "city": "Santiago",
+    "country": "Chile",
+    "latitude": -33.4489,
+    "longitude": -70.6693,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ciee-rio",
+    "name": "CIEE Rio de Janeiro",
+    "shortName": "CIEE Rio",
+    "provider": "CIEE",
+    "city": "Rio de Janeiro",
+    "country": "Brazil",
+    "latitude": -22.9068,
+    "longitude": -43.1729,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ciee-costa-rica",
+    "name": "CIEE San José",
+    "shortName": "CIEE Costa Rica",
+    "provider": "CIEE",
+    "city": "San José",
+    "country": "Costa Rica",
+    "latitude": 9.9281,
+    "longitude": -84.0907,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "sit-ecuador",
+    "name": "SIT Ecuador",
+    "shortName": "SIT Ecuador",
+    "provider": "SIT",
+    "city": "Quito",
+    "country": "Ecuador",
+    "latitude": -0.1807,
+    "longitude": -78.4678,
+    "domains": [
+      "sit.edu"
+    ],
+    "accentHex": "#E87722"
+  },
+  {
+    "slug": "nyu-shanghai",
+    "name": "NYU Shanghai",
+    "shortName": "NYU Shanghai",
+    "provider": "NYU",
+    "city": "Shanghai",
+    "country": "China",
+    "latitude": 31.2304,
+    "longitude": 121.4737,
+    "domains": [
+      "nyu.edu"
+    ],
+    "accentHex": "#57068C"
+  },
+  {
+    "slug": "nyu-abu-dhabi",
+    "name": "NYU Abu Dhabi",
+    "shortName": "NYU AD",
+    "provider": "NYU",
+    "city": "Abu Dhabi",
+    "country": "United Arab Emirates",
+    "latitude": 24.5232,
+    "longitude": 54.434,
+    "domains": [
+      "nyu.edu"
+    ],
+    "accentHex": "#57068C"
+  },
+  {
+    "slug": "ciee-tokyo",
+    "name": "CIEE Tokyo",
+    "shortName": "CIEE Tokyo",
+    "provider": "CIEE",
+    "city": "Tokyo",
+    "country": "Japan",
+    "latitude": 35.6762,
+    "longitude": 139.6503,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "temple-tokyo",
+    "name": "Temple Tokyo",
+    "shortName": "Temple Tokyo",
+    "provider": "Temple University",
+    "city": "Tokyo",
+    "country": "Japan",
+    "latitude": 35.69,
+    "longitude": 139.7,
+    "domains": [
+      "temple.edu"
+    ],
+    "accentHex": "#9E1B32"
+  },
+  {
+    "slug": "ciee-seoul",
+    "name": "CIEE Seoul",
+    "shortName": "CIEE Seoul",
+    "provider": "CIEE",
+    "city": "Seoul",
+    "country": "South Korea",
+    "latitude": 37.5665,
+    "longitude": 126.978,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ciee-sydney",
+    "name": "CIEE Sydney",
+    "shortName": "CIEE Sydney",
+    "provider": "CIEE",
+    "city": "Sydney",
+    "country": "Australia",
+    "latitude": -33.8688,
+    "longitude": 151.2093,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ies-sydney",
+    "name": "IES Sydney",
+    "shortName": "IES Sydney",
+    "provider": "IES Abroad",
+    "city": "Sydney",
+    "country": "Australia",
+    "latitude": -33.87,
+    "longitude": 151.21,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "cea-sydney",
+    "name": "CEA CAPA Sydney",
+    "shortName": "CEA Sydney",
+    "provider": "CEA CAPA",
+    "city": "Sydney",
+    "country": "Australia",
+    "latitude": -33.865,
+    "longitude": 151.209,
+    "domains": [
+      "ceastudyabroad.com"
+    ],
+    "accentHex": "#00A3E0"
+  },
+  {
+    "slug": "ciee-cape-town",
+    "name": "CIEE Cape Town",
+    "shortName": "CIEE Cape Town",
+    "provider": "CIEE",
+    "city": "Cape Town",
+    "country": "South Africa",
+    "latitude": -33.9249,
+    "longitude": 18.4241,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "sit-morocco",
+    "name": "SIT Morocco",
+    "shortName": "SIT Morocco",
+    "provider": "SIT",
+    "city": "Rabat",
+    "country": "Morocco",
+    "latitude": 34.0209,
+    "longitude": -6.8416,
+    "domains": [
+      "sit.edu"
+    ],
+    "accentHex": "#E87722"
+  },
+  {
+    "slug": "ciee-rabat",
+    "name": "CIEE Rabat",
+    "shortName": "CIEE Rabat",
+    "provider": "CIEE",
+    "city": "Rabat",
+    "country": "Morocco",
+    "latitude": 34.02,
+    "longitude": -6.84,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "aifs-salzburg",
+    "name": "AIFS Salzburg",
+    "shortName": "AIFS Salzburg",
+    "provider": "AIFS",
+    "city": "Salzburg",
+    "country": "Austria",
+    "latitude": 47.8095,
+    "longitude": 13.055,
+    "domains": [
+      "aifsabroad.com"
+    ],
+    "accentHex": "#0033A0"
+  },
+  {
+    "slug": "ies-vienna",
+    "name": "IES Vienna",
+    "shortName": "IES Vienna",
+    "provider": "IES Abroad",
+    "city": "Vienna",
+    "country": "Austria",
+    "latitude": 48.2082,
+    "longitude": 16.3738,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "ciee-lisbon",
+    "name": "CIEE Lisbon",
+    "shortName": "CIEE Lisbon",
+    "provider": "CIEE",
+    "city": "Lisbon",
+    "country": "Portugal",
+    "latitude": 38.7223,
+    "longitude": -9.1393,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "api-lisbon",
+    "name": "API Lisbon",
+    "shortName": "API Lisbon",
+    "provider": "API",
+    "city": "Lisbon",
+    "country": "Portugal",
+    "latitude": 38.71,
+    "longitude": -9.14,
+    "domains": [
+      "apistudyabroad.com"
+    ],
+    "accentHex": "#C8102E"
+  },
+  {
+    "slug": "cea-seville",
+    "name": "CEA CAPA Seville",
+    "shortName": "CEA Seville",
+    "provider": "CEA CAPA",
+    "city": "Seville",
+    "country": "Spain",
+    "latitude": 37.3886,
+    "longitude": -5.9823,
+    "domains": [
+      "ceastudyabroad.com"
+    ],
+    "accentHex": "#00A3E0"
+  },
+  {
+    "slug": "ies-madrid",
+    "name": "IES Madrid",
+    "shortName": "IES Madrid",
+    "provider": "IES Abroad",
+    "city": "Madrid",
+    "country": "Spain",
+    "latitude": 40.415,
+    "longitude": -3.705,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "ciee-shanghai",
+    "name": "CIEE Shanghai",
+    "shortName": "CIEE Shanghai",
+    "provider": "CIEE",
+    "city": "Shanghai",
+    "country": "China",
+    "latitude": 31.23,
+    "longitude": 121.47,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ciee-singapore",
+    "name": "CIEE Singapore",
+    "shortName": "CIEE Singapore",
+    "provider": "CIEE",
+    "city": "Singapore",
+    "country": "Singapore",
+    "latitude": 1.3521,
+    "longitude": 103.8198,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "aifs-grenoble",
+    "name": "AIFS Grenoble",
+    "shortName": "AIFS Grenoble",
+    "provider": "AIFS",
+    "city": "Grenoble",
+    "country": "France",
+    "latitude": 45.1885,
+    "longitude": 5.7245,
+    "domains": [
+      "aifsabroad.com"
+    ],
+    "accentHex": "#0033A0"
+  },
+  {
+    "slug": "cea-aix",
+    "name": "CEA CAPA Aix-en-Provence",
+    "shortName": "CEA Aix",
+    "provider": "CEA CAPA",
+    "city": "Aix-en-Provence",
+    "country": "France",
+    "latitude": 43.5297,
+    "longitude": 5.4474,
+    "domains": [
+      "ceastudyabroad.com"
+    ],
+    "accentHex": "#00A3E0"
+  },
+  {
+    "slug": "sit-nepal",
+    "name": "SIT Nepal",
+    "shortName": "SIT Nepal",
+    "provider": "SIT",
+    "city": "Kathmandu",
+    "country": "Nepal",
+    "latitude": 27.7172,
+    "longitude": 85.324,
+    "domains": [
+      "sit.edu"
+    ],
+    "accentHex": "#E87722"
+  },
+  {
+    "slug": "sit-kenya",
+    "name": "SIT Kenya",
+    "shortName": "SIT Kenya",
+    "provider": "SIT",
+    "city": "Nairobi",
+    "country": "Kenya",
+    "latitude": -1.2921,
+    "longitude": 36.8219,
+    "domains": [
+      "sit.edu"
+    ],
+    "accentHex": "#E87722"
+  },
+  {
+    "slug": "ciee-melbourne",
+    "name": "CIEE Melbourne",
+    "shortName": "CIEE Melbourne",
+    "provider": "CIEE",
+    "city": "Melbourne",
+    "country": "Australia",
+    "latitude": -37.8136,
+    "longitude": 144.9631,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "syracuse-madrid",
+    "name": "Syracuse Madrid",
+    "shortName": "Syrac Madrid",
+    "provider": "Syracuse Abroad",
+    "city": "Madrid",
+    "country": "Spain",
+    "latitude": 40.42,
+    "longitude": -3.69,
+    "domains": [
+      "syr.edu"
+    ],
+    "accentHex": "#F76900"
+  },
+  {
+    "slug": "api-barcelona",
+    "name": "API Barcelona",
+    "shortName": "API Barcelona",
+    "provider": "API",
+    "city": "Barcelona",
+    "country": "Spain",
+    "latitude": 41.386,
+    "longitude": 2.17,
+    "domains": [
+      "apistudyabroad.com"
+    ],
+    "accentHex": "#C8102E"
+  },
+  {
+    "slug": "ies-nantes",
+    "name": "IES Nantes",
+    "shortName": "IES Nantes",
+    "provider": "IES Abroad",
+    "city": "Nantes",
+    "country": "France",
+    "latitude": 47.2184,
+    "longitude": -1.5536,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "cea-dublin",
+    "name": "CEA CAPA Dublin",
+    "shortName": "CEA Dublin",
+    "provider": "CEA CAPA",
+    "city": "Dublin",
+    "country": "Ireland",
+    "latitude": 53.35,
+    "longitude": -6.26,
+    "domains": [
+      "ceastudyabroad.com"
+    ],
+    "accentHex": "#00A3E0"
+  },
+  {
+    "slug": "aifs-london",
+    "name": "AIFS London",
+    "shortName": "AIFS London",
+    "provider": "AIFS",
+    "city": "London",
+    "country": "United Kingdom",
+    "latitude": 51.51,
+    "longitude": -0.13,
+    "domains": [
+      "aifsabroad.com"
+    ],
+    "accentHex": "#0033A0"
+  },
+  {
+    "slug": "ciee-brussels",
+    "name": "CIEE Brussels",
+    "shortName": "CIEE Brussels",
+    "provider": "CIEE",
+    "city": "Brussels",
+    "country": "Belgium",
+    "latitude": 50.8503,
+    "longitude": 4.3517,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "ies-santiago",
+    "name": "IES Santiago",
+    "shortName": "IES Santiago",
+    "provider": "IES Abroad",
+    "city": "Santiago",
+    "country": "Chile",
+    "latitude": -33.45,
+    "longitude": -70.67,
+    "domains": [
+      "iesabroad.org"
+    ],
+    "accentHex": "#1A1A6C"
+  },
+  {
+    "slug": "ciee-botswana",
+    "name": "CIEE Botswana",
+    "shortName": "CIEE Gaborone",
+    "provider": "CIEE",
+    "city": "Gaborone",
+    "country": "Botswana",
+    "latitude": -24.6282,
+    "longitude": 25.9231,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  },
+  {
+    "slug": "nyu-tel-aviv",
+    "name": "NYU Tel Aviv",
+    "shortName": "NYU Tel Aviv",
+    "provider": "NYU",
+    "city": "Tel Aviv",
+    "country": "Israel",
+    "latitude": 32.0853,
+    "longitude": 34.7818,
+    "domains": [
+      "nyu.edu"
+    ],
+    "accentHex": "#57068C"
+  },
+  {
+    "slug": "sit-iceland",
+    "name": "SIT Iceland",
+    "shortName": "SIT Iceland",
+    "provider": "SIT",
+    "city": "Reykjavik",
+    "country": "Iceland",
+    "latitude": 64.1466,
+    "longitude": -21.9426,
+    "domains": [
+      "sit.edu"
+    ],
+    "accentHex": "#E87722"
+  },
+  {
+    "slug": "cea-rome",
+    "name": "CEA CAPA Rome",
+    "shortName": "CEA Rome",
+    "provider": "CEA CAPA",
+    "city": "Rome",
+    "country": "Italy",
+    "latitude": 41.901,
+    "longitude": 12.5,
+    "domains": [
+      "ceastudyabroad.com"
+    ],
+    "accentHex": "#00A3E0"
+  },
+  {
+    "slug": "api-rome",
+    "name": "API Rome",
+    "shortName": "API Rome",
+    "provider": "API",
+    "city": "Rome",
+    "country": "Italy",
+    "latitude": 41.9,
+    "longitude": 12.48,
+    "domains": [
+      "apistudyabroad.com"
+    ],
+    "accentHex": "#C8102E"
+  },
+  {
+    "slug": "ciee-berlin-open",
+    "name": "CIEE Open Campus Berlin",
+    "shortName": "CIEE Berlin OC",
+    "provider": "CIEE",
+    "city": "Berlin",
+    "country": "Germany",
+    "latitude": 52.525,
+    "longitude": 13.41,
+    "domains": [
+      "ciee.org"
+    ],
+    "accentHex": "#0051FF"
+  }
+]
