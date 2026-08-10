@@ -13,7 +13,7 @@ Use this checklist. Most backend/app work is already done. Complete the **YOU** 
 - [x] Removed unused Android location / mic / legacy storage permissions
 - [x] Feature graphic generated: `store/play/feature-graphic.png` (1024×500)
 - [x] Production EAS env vars (Supabase, Mapbox, legal URL, demo seed off)
-- [x] Package id: `com.abroadster.app`
+- [x] Package id: `com.abroadster.myapp`
 
 ### Important URLs (paste into Play Console)
 

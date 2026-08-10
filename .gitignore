@@ -48,6 +48,7 @@ data/catalog/_hipo_cache.json
 supabase/.temp/
 
 secrets/
+credentials.json
 tmp-check-rls.js
 *.pma
 store/play/screenshots/
