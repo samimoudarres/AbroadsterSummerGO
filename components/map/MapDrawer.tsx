@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -95,10 +96,7 @@ export function MapDrawer({
     const people = items.filter((i) => i.kind === 'person');
     const schools = items.filter((i) => i.kind === 'program');
     const out: RowItem[] = [];
-    if (places.length > 0) {
-      out.push({ kind: 'section', id: 'section-places', title: 'Places' });
-      out.push(...places);
-    }
+
     if (filterActive) {
       out.push({
         kind: 'section',
@@ -116,12 +114,28 @@ export function MapDrawer({
       } else {
         out.push(...people);
       }
+      if (places.length > 0) {
+        out.push({ kind: 'section', id: 'section-places', title: 'Places' });
+        out.push(...places);
+      }
       return out;
     }
-    if (peopleAndTrips.length > 0 && searchQuery.trim().length > 0) {
-      out.push({ kind: 'section', id: 'section-people', title: 'People & trips' });
+
+    // People → Places → Schools (search + browse)
+    if (peopleAndTrips.length > 0) {
+      if (searchQuery.trim().length > 0) {
+        out.push({
+          kind: 'section',
+          id: 'section-people',
+          title: 'People & trips',
+        });
+      }
+      out.push(...peopleAndTrips);
     }
-    out.push(...peopleAndTrips);
+    if (places.length > 0) {
+      out.push({ kind: 'section', id: 'section-places', title: 'Places' });
+      out.push(...places);
+    }
     if (schools.length > 0) {
       out.push({ kind: 'section', id: 'section-schools', title: 'Schools' });
       out.push(...schools);
@@ -129,10 +143,15 @@ export function MapDrawer({
     return out;
   }, [items, searchQuery, filterActive, filterEmptyLabel]);
 
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+    inputRef.current?.blur();
+  };
+
   const closeSearch = () => {
     setSearchOpen(false);
     onSearchChange('');
-    inputRef.current?.blur();
+    dismissKeyboard();
   };
 
   return (
@@ -146,6 +165,9 @@ export function MapDrawer({
       style={styles.sheet}
       keyboardBehavior="extend"
       android_keyboardInputMode="adjustResize"
+      onChange={(index) => {
+        if (index <= 1) dismissKeyboard();
+      }}
     >
       <View style={styles.searchRow}>
         <View style={styles.searchTrack}>
@@ -163,7 +185,10 @@ export function MapDrawer({
                 ref={inputRef}
                 value={searchQuery}
                 onChangeText={onSearchChange}
-                onSubmitEditing={() => onSearchSubmit?.(searchQuery)}
+                onSubmitEditing={() => {
+                  dismissKeyboard();
+                  onSearchSubmit?.(searchQuery);
+                }}
                 placeholder="Search people, schools, places"
                 placeholderTextColor={colors.textMuted}
                 style={styles.expandedInput}
@@ -273,25 +298,49 @@ export function MapDrawer({
           }
           if (item.kind === 'person') {
             return (
-              <PersonRow item={item} onPress={() => onPersonPress(item)} />
+              <PersonRow
+                item={item}
+                onPress={() => {
+                  dismissKeyboard();
+                  onPersonPress(item);
+                }}
+              />
             );
           }
           if (item.kind === 'trip') {
             return (
               <TripRow
                 item={item}
-                onPress={() => onTripPress(item)}
-                onRequestJoin={() => onRequestJoin(item)}
+                onPress={() => {
+                  dismissKeyboard();
+                  onTripPress(item);
+                }}
+                onRequestJoin={() => {
+                  dismissKeyboard();
+                  onRequestJoin(item);
+                }}
               />
             );
           }
           if (item.kind === 'place') {
             return (
-              <PlaceRow item={item} onPress={() => onPlacePress(item)} />
+              <PlaceRow
+                item={item}
+                onPress={() => {
+                  dismissKeyboard();
+                  onPlacePress(item);
+                }}
+              />
             );
           }
           return (
-            <ProgramRow item={item} onPress={() => onProgramPress(item)} />
+            <ProgramRow
+              item={item}
+              onPress={() => {
+                dismissKeyboard();
+                onProgramPress(item);
+              }}
+            />
           );
         }}
       />

@@ -57,6 +57,7 @@ import { MembersSheet } from './MembersSheet';
 import { MessageBubble } from './MessageBubble';
 import { ReactionPicker } from './ReactionPicker';
 import { ProfileModal } from '../profile/ProfileModal';
+import { Avatar } from '../common/Avatar';
 import { getUserById } from '../../data/mockMapData';
 import type { UserProfile } from '../../data/types';
 
@@ -602,8 +603,9 @@ export function CommunityScreen({
     return rows;
   }, [messages]);
 
+  const dmOther = dmOtherId ? profiles[dmOtherId] : null;
   const headerTitle = dmOtherId
-    ? profiles[dmOtherId]?.fullName ?? 'AirMail'
+    ? dmOther?.fullName ?? 'Airmail'
     : tripChannelTitle
       ? tripChannelTitle
       : activeSlug === 'general'
@@ -700,7 +702,54 @@ export function CommunityScreen({
           )}
         </View>
 
-        {headerTitle ? (
+        {dmOtherId && headerTitle ? (
+          <Pressable
+            style={styles.dmHeaderRow}
+            onPress={() => {
+              const p = profiles[dmOtherId];
+              if (!p) return;
+              const mapped = getUserById(dmOtherId);
+              if (mapped) {
+                setProfileUser(mapped);
+                setShowProfile(true);
+                return;
+              }
+              setProfileUser({
+                id: p.id,
+                firstName: p.firstName,
+                lastName: p.lastName,
+                fullName: p.fullName,
+                avatar: p.avatar,
+                homeUniversity: p.homeUniversity,
+                studyAbroadProgram: p.studyAbroadProgram,
+                hostCity: p.hostCity || '',
+                hostCountry: p.hostCountry || '',
+                semester: p.semester || '',
+                bio: p.bio ?? undefined,
+                countriesVisited: p.countriesVisited ?? 0,
+                isFriend: false,
+                locationPrivacy: 'city',
+                latitude: 48.8566,
+                longitude: 2.3522,
+                locationLabel: '',
+                passportBadges: [],
+                albums: [],
+                posts: [],
+                isVerifiedStudent: p.isVerifiedStudent,
+              });
+              setShowProfile(true);
+            }}
+          >
+            <Avatar
+              source={dmOther?.avatar}
+              name={headerTitle}
+              size={28}
+            />
+            <Text style={styles.dmHeaderText} numberOfLines={1}>
+              Airmail · {headerTitle}
+            </Text>
+          </Pressable>
+        ) : headerTitle ? (
           <Text style={styles.subHeader}>{headerTitle}</Text>
         ) : null}
 
@@ -854,6 +903,41 @@ export function CommunityScreen({
                   }}
                   onViewPost={(postId) => onViewSharedPost?.(postId)}
                   onOpenTaggedTrip={onOpenTaggedTrip}
+                  onAvatarPress={(userId) => {
+                    const mapped = getUserById(userId);
+                    const p = profiles[userId];
+                    if (mapped) {
+                      setProfileUser(mapped);
+                      setShowProfile(true);
+                      return;
+                    }
+                    if (p) {
+                      setProfileUser({
+                        id: p.id,
+                        firstName: p.firstName,
+                        lastName: p.lastName,
+                        fullName: p.fullName,
+                        avatar: p.avatar,
+                        homeUniversity: p.homeUniversity,
+                        studyAbroadProgram: p.studyAbroadProgram,
+                        hostCity: p.hostCity || '',
+                        hostCountry: p.hostCountry || '',
+                        semester: p.semester || '',
+                        bio: p.bio ?? undefined,
+                        countriesVisited: p.countriesVisited ?? 0,
+                        isFriend: false,
+                        locationPrivacy: 'city',
+                        latitude: 48.8566,
+                        longitude: 2.3522,
+                        locationLabel: '',
+                        passportBadges: [],
+                        albums: [],
+                        posts: [],
+                        isVerifiedStudent: p.isVerifiedStudent,
+                      });
+                      setShowProfile(true);
+                    }
+                  }}
                 />
               );
             }}
@@ -1301,6 +1385,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
     marginTop: 6,
+  },
+  dmHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 2,
+    paddingHorizontal: 16,
+  },
+  dmHeaderText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 15,
+    color: colors.black,
+    flexShrink: 1,
   },
   thread: { flex: 1 },
   daySep: {

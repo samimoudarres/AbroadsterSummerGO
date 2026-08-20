@@ -16,7 +16,7 @@ Find classmates and friends nearby, plan trips together, share albums from every
 
 Abroadster is made for university students living and traveling abroad.
 
-Support: support@abroadster.com
+Support: samimoudarres@hotmail.com
 
 ## URLs
 Privacy: https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/privacy.html

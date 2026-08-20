@@ -14,7 +14,7 @@ Abroadster is the social map for students studying abroad.
 
 Find classmates and friends nearby, plan trips together, share albums from every city, and stay in the loop with DMs and school community chats.
 
-• See friends on the map when they choose to share
+• See friends on the map by live city (when they allow location) or study-abroad city
 • Create and lock in group trips
 • Follow trip albums and stamp posts
 • Message friends and join school communities
@@ -22,44 +22,90 @@ Find classmates and friends nearby, plan trips together, share albums from every
 
 Abroadster is made for university students living and traveling abroad.
 
-## Keywords (100 chars, comma-separated, no spaces after commas ideally)
+Support: samimoudarres@hotmail.com
+
+## Keywords (100 chars max, comma-separated)
 study abroad,student travel,exchange,map,trips,albums,friends,university,abroad,passport
 
-## Support URL
-mailto:support@abroadster.com
-(or your hosted support page once available)
+## Support URL (REQUIRED — must load as a real support webpage)
+https://abroadster.vercel.app/support
 
 ## Marketing URL (optional)
-(leave blank until you have a marketing site)
+https://abroadster.vercel.app
 
-Privacy Policy URL (REQUIRED — paste this into App Store Connect):
-https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/privacy.html
+## Privacy Policy URL (REQUIRED)
+https://abroadster.vercel.app/privacy
 
-Terms of Use URL (optional but recommended):
-https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/terms.html
+## Terms of Use (EULA) URL
+https://abroadster.vercel.app/terms
+
+## Account deletion (Apple / Google may ask)
+https://abroadster.vercel.app/delete-account
 
 ## Category
 Primary: Social Networking
 Secondary: Travel
 
 ## Age Rating
-13+
-Not Kids Category
-No unrestricted web access intended for kids
-Mild user-generated content (social)
+Answer the questionnaire honestly. Expected outcome: 17+ or 13+ depending on UGC answers.
+- User-generated content: Yes (posts, messages, photos)
+- Frequent/Intense Profanity or Crude Humor: No
+- Mature/Suggestive Themes: No (unless you allow unrestricted chat — choose Unrestricted Web Access / UGC carefully)
+- Contests: No
+- Age Assurance / In-App Controls / Parental Controls: None (app has neither parental controls nor age assurance)
+Not Kids Category.
+
+Practical tip: For social UGC apps Apple often lands on 17+ if messaging is unrestricted. Either is fine if consistent.
+IMPORTANT: Selecting In-App Controls / Age Assurance when the app has none causes Guideline 2.3.6 rejection.
 
 ## App Privacy (nutrition labels) — answer based on real behavior
 Data Linked to You:
-• Contact Info (email / phone for account)
-• User Content (posts, messages, photos, trip details)
-• Identifiers (account id / push token)
-• Location (approximate / precise when permission granted — used for map)
-• Usage Data (app interactions for notifications)
+• Contact Info — Email or phone used to create an account
+• User Content — Posts, messages, photos, trip details, profile bio
+• Identifiers — Account ID; push notification token (if user allows notifications)
+• Location — Precise location while using the map (When-In-Use GPS) so your pin and nearby list show the city you are actually in; plus approximate host city from your profile
+• Usage Data — App interactions used to deliver in-app activity / notifications
 
-Tracking: No (NSPrivacyTracking false; no ATT)
+Tracking: No
+Do we use data for tracking across apps/websites? No
+NSUserTrackingUsageDescription: not used (no ATT prompt)
 
-## Review Notes
-Demo account: create a fresh account in-app (email/password signup).
-Account deletion: Profile → menu → Delete account.
-Push notifications and location are requested during signup.
-Test with two accounts for trip invites, join requests, stamps, and DMs.
+## Review Notes (paste into App Review Information → Notes)
+Abroadster is a social app for university students studying abroad (13+).
+
+AGE ASSURANCE (Guideline 2.3.6) — READ FIRST
+Parental Controls: NO. Age Assurance: YES.
+Demo login skips sign-up, so age assurance is NOT shown when using demo credentials.
+To verify: Sign out → Create account → Name → Email → Password → "Verify your age" → enter DOB under 13 → blocked.
+Also: Profile → Settings → Age requirement (13+).
+
+HOW TO SIGN IN (main features)
+Demo: samimoudarres@gmail.com / testaccount
+Or Sign up with Email and complete onboarding (birthday must be 13+).
+
+DEMO CONTENT
+Production builds use live Supabase data (demo seed is off). After signup you will see the map with study-abroad city pins, trips, feed, and chats based on real backend data. If the map looks empty at first, pan/zoom around popular study cities (e.g. Paris) or search a city in the map search bar.
+
+ACCOUNT DELETION
+Profile → Settings → Delete account
+Also: https://abroadster.vercel.app/delete-account
+
+MODERATION
+Users can Report and Block other users from profile menus. Reports go to our moderation flow / samimoudarres@hotmail.com.
+
+PERMISSIONS
+• Photos / Camera — only when the user chooses to upload a profile photo, post, album photo, or chat attachment
+• Notifications — optional; requested after signup so users can get DMs / trip updates
+• Location — When-In-Use only, while using the map, so friends see your actual city. Decline the prompt to stay on your host-city pin.
+
+WHAT TO TEST
+• Age assurance: sign out → Create account → Verify your age (under-13 blocked)
+• Map tab: pan, search a city, open a person / trip pin
+• Create or view a trip; open trip album
+• Send a DM (use two accounts if possible)
+• Settings → Delete account (use throwaway account)
+
+Support: https://abroadster.vercel.app/support
+Privacy: https://abroadster.vercel.app/privacy
+Terms: https://abroadster.vercel.app/terms
+Contact: samimoudarres@hotmail.com

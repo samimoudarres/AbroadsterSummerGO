@@ -88,30 +88,22 @@ export function ensureHostCity(opts: {
   );
 
   if (!existing) {
-    for (const c of opts.cities) {
-      if (c.userId === opts.userId) c.sortOrder += 1;
-    }
+    const maxOrder = opts.cities
+      .filter((c) => c.userId === opts.userId)
+      .reduce((m, c) => Math.max(m, c.sortOrder), -1);
     opts.cities.push({
       id: id('pcity'),
       userId: opts.userId,
       cityName: city,
       countryName: country,
-      sortOrder: 0,
+      sortOrder: maxOrder + 1,
       source: 'host',
       tripId: null,
       latitude: null,
       longitude: null,
     });
   } else {
-    // Promote host city to top of rankings and refresh country label
-    if (existing.sortOrder !== 0) {
-      for (const c of opts.cities) {
-        if (c.userId === opts.userId && c.id !== existing.id) {
-          c.sortOrder += 1;
-        }
-      }
-      existing.sortOrder = 0;
-    }
+    // Host city already in rankings — refresh label only; do NOT force sortOrder 0
     existing.source = 'host';
     if (country) existing.countryName = country;
   }

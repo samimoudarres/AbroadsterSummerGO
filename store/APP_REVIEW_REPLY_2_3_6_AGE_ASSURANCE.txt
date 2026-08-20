@@ -1,0 +1,91 @@
+# App Store — reply for Aug 19 rejection (Guideline 2.3.6 Age Assurance only)
+# Paste into: Reply to App Review
+
+================================================================================
+RESOLUTION CENTER REPLY
+================================================================================
+
+Thank you for reviewing Abroadster again. We understand the confusion and have clarified below.
+
+Our Age Rating answers are:
+• Parental Controls: NO
+• Age Assurance: YES
+
+Abroadster does not include parental controls. We do include age assurance: users must enter their date of birth during sign-up, and users under 13 cannot create an account or access any social features (map, feed, chat, trips, messaging).
+
+Why the reviewer may not have seen it:
+The demo login credentials we provided skip the sign-up flow entirely, so the age assurance step is not shown when signing in with the demo account.
+
+How to locate age assurance (please follow exactly):
+1. Launch Abroadster on the review device.
+2. If signed in, go to Profile → Settings → Log out.
+3. On the Welcome screen, note the text: "Abroadster is for ages 13+. Age is verified during sign-up."
+4. Tap Create account (do not use Log in / demo credentials for this test).
+5. Complete: Name → Email/phone → Password.
+6. On the "Verify your age" screen, read the Age assurance card, then enter a date of birth that makes the user under 13 years old.
+7. Tap Next. The app blocks account creation and shows: "You must be at least 13 years old to use Abroadster."
+8. Enter a valid 13+ date of birth to continue onboarding.
+
+Also in Settings (while signed in):
+Profile → Settings → Support section → tap "Age requirement (13+)" for an explanation of the age assurance mechanism and how to view the sign-up verification step.
+
+Our Privacy Policy and Terms also state the 13+ requirement:
+https://abroadster.vercel.app/privacy
+https://abroadster.vercel.app/terms
+
+We have updated the in-app sign-up screens and Settings to make age assurance easier to find. Build [NEW BUILD NUMBER] includes these clarifications.
+
+We respectfully ask you to re-review using the Create account flow above rather than the demo login when verifying age assurance.
+
+Support: samimoudarres@hotmail.com
+
+================================================================================
+APP STORE CONNECT — WHAT YOU DO
+================================================================================
+
+1) Age Rating (DO NOT change Parental Controls — keep NO)
+   App Information → Age Ratings → Edit
+   • Parental Controls: NO
+   • Age Assurance: YES
+   • Save (13+ calculated rating is correct)
+
+2) Build a new iOS binary (required — we updated in-app UI)
+   From project root:
+   eas build --platform ios --profile production
+   eas submit --platform ios --profile production
+   Attach the new build to version 1.0.1 in App Store Connect.
+
+3) Update App Review Information → Notes (replace with block below)
+
+4) Reply to App Review (paste reply above; replace [NEW BUILD NUMBER])
+
+5) Resubmit to App Review
+
+================================================================================
+REVIEW NOTES (paste into App Review Information → Notes)
+================================================================================
+
+Abroadster — social app for university students studying abroad (13+).
+
+IMPORTANT — AGE ASSURANCE (Guideline 2.3.6)
+Parental Controls: NO. Age Assurance: YES.
+Demo login SKIPS sign-up, so age assurance is NOT visible when using demo credentials.
+
+To verify age assurance:
+1. Sign out (Profile → Settings → Log out)
+2. Tap Create account (not Log in)
+3. Name → Email → Password → Verify your age
+4. Enter DOB under 13 → blocked with "You must be at least 13 years old to use Abroadster."
+5. Or: Profile → Settings → Age requirement (13+)
+
+DEMO LOGIN (for testing main features after age check)
+Email: samimoudarres@gmail.com
+Password: testaccount
+
+Support URL: https://abroadster.vercel.app/support
+Privacy: https://abroadster.vercel.app/privacy
+Terms: https://abroadster.vercel.app/terms
+Delete account: Profile → Settings → Delete account
+Also: https://abroadster.vercel.app/delete-account
+
+Contact: samimoudarres@hotmail.com

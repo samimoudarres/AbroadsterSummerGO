@@ -132,8 +132,8 @@ export function WelcomeScreen({ onCreateAccount, onLogin }: WelcomeScreenProps) 
         <View style={styles.logoSlot}>
           <Image
             source={LOGO}
-            style={{ width: 162 * sx, height: 51 * sy }}
-            resizeMode="cover"
+            style={{ width: 182 * sx, height: 46 * sy }}
+            resizeMode="contain"
           />
         </View>
       </View>
@@ -166,6 +166,20 @@ export function WelcomeScreen({ onCreateAccount, onLogin }: WelcomeScreenProps) 
           Find your people abroad.{'\n'}
           Plan trips.{'\n'}
           Share the moments.
+        </Text>
+
+        <Text
+          style={[
+            styles.ageNote,
+            {
+              marginTop: 10 * sy,
+              width: 307 * sx,
+              fontSize: 11 * st,
+              lineHeight: 15 * st,
+            },
+          ]}
+        >
+          Abroadster is for ages 13+. Age is verified during sign-up.
         </Text>
 
         <Pressable
@@ -301,6 +315,11 @@ const styles = StyleSheet.create({
   tagline: {
     fontFamily: fonts.regular,
     color: colors.white,
+    textAlign: 'center',
+  },
+  ageNote: {
+    fontFamily: fonts.regular,
+    color: 'rgba(255,255,255,0.88)',
     textAlign: 'center',
   },
   btnCreate: {

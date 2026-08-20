@@ -1,0 +1,66 @@
+.wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.35));
+}
+
+.word {
+  display: block;
+  font-family: var(--font-display), Impact, Haettenschweiler, 'Arial Black', sans-serif;
+  font-size: clamp(2.6rem, 11vw, 6.2rem);
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  font-weight: 400;
+  text-transform: uppercase;
+  color: transparent;
+  background-image: url('/phones/feed.png');
+  background-size: 180% auto;
+  background-position: 42% 18%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-stroke: 1.5px rgba(247, 242, 232, 0.95);
+  filter: drop-shadow(0 2px 0 rgba(14, 61, 69, 0.45));
+}
+
+.waves {
+  position: absolute;
+  top: 8%;
+  right: -2%;
+  width: clamp(28px, 6vw, 48px);
+  height: clamp(18px, 4vw, 28px);
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0 3px,
+    rgba(247, 242, 232, 0.75) 3px 5px
+  );
+  border-radius: 2px;
+  transform: rotate(-6deg);
+  opacity: 0.85;
+}
+
+.pin {
+  position: absolute;
+  left: 4%;
+  top: 18%;
+  width: clamp(10px, 2vw, 16px);
+  height: clamp(14px, 2.6vw, 22px);
+  background: var(--coral);
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.pin::after {
+  content: '';
+  position: absolute;
+  inset: 28%;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+}
+
+@media (max-width: 480px) {
+  .word {
+    -webkit-text-stroke: 1.5px rgba(247, 242, 232, 0.9);
+  }
+}

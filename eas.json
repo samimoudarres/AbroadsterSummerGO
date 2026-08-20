@@ -25,12 +25,20 @@
       "android": {
         "credentialsSource": "local"
       },
+      "ios": {
+        "resourceClass": "m-medium"
+      },
       "env": {
         "EXPO_PUBLIC_DEMO_SEED": "0"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6800081262",
+        "appleTeamId": "SJ2N363TSK"
+      }
+    }
   }
 }

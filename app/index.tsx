@@ -1,26 +1,34 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { AppShell } from '../components/shell/AppShell';
 import { AuthRoot } from '../components/auth/AuthRoot';
 import { useAuth } from '../lib/auth/AuthContext';
 import { BRAND_TEAL } from '../constants/theme';
+
+/** Lazy-load heavy native shell (maps / bottom-sheet) so login cold-start stays light. */
+const AppShell = lazy(() =>
+  import('../components/shell/AppShell').then((m) => ({ default: m.AppShell })),
+);
+
+function BootSpinner({ dark }: { dark?: boolean }) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: dark ? BRAND_TEAL : '#fff',
+      }}
+    >
+      <ActivityIndicator color={dark ? '#fff' : BRAND_TEAL} size="large" />
+    </View>
+  );
+}
 
 export default function Index() {
   const { ready, session, passwordRecovery } = useAuth();
 
   if (!ready) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: BRAND_TEAL,
-        }}
-      >
-        <ActivityIndicator color="#fff" size="large" />
-      </View>
-    );
+    return <BootSpinner dark />;
   }
 
   // Recovery sessions must stay on auth UI until a new password is saved
@@ -28,5 +36,9 @@ export default function Index() {
     return <AuthRoot />;
   }
 
-  return <AppShell />;
+  return (
+    <Suspense fallback={<BootSpinner dark />}>
+      <AppShell />
+    </Suspense>
+  );
 }

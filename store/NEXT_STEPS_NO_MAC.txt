@@ -1,87 +1,51 @@
-Abroadster — what YOU still do for App Store (no MacBook required for most of this)
+# Abroadster — what YOU still do for App Store
+
+Full guide: store/APP_STORE_LAUNCH.md
+Listing copy: store/APP_STORE_LISTING.txt
 
 ============================================================
-A) ONE interactive terminal command (Apple login) — REQUIRED
+1) Apple Developer — create App ID
 ============================================================
-In Cursor terminal, project folder:
-
-  $env:EXPO_TOKEN="(your expo token from .env)"
-  $env:EAS_NO_VCS="1"
-  npx eas-cli@latest build --platform ios --profile production
-
-When asked:
-  1. Log in with your Apple Developer Apple ID
-  2. Select your Team
-  3. Let Expo generate Distribution Certificate + Provisioning Profile (YES)
-  4. Wait for the cloud iOS build (~15–25 min)
-
-You do NOT need your Mac for this — EAS builds on Expo’s Macs.
-
-After it finishes, open the build page and confirm status = Finished.
-
+https://developer.apple.com/account/resources/identifiers/list
+Bundle ID (explicit): com.abroadster.app
+Enable: Push Notifications
 
 ============================================================
-B) App Store Connect (browser on any PC) — REQUIRED
+2) App Store Connect — create app + listing
 ============================================================
-1. Go to https://appstoreconnect.apple.com
-2. My Apps → + → New App
-   - Platforms: iOS
-   - Name: Abroadster
-   - Bundle ID: com.abroadster.app  (create it in Certificates/Identifiers if missing)
-   - SKU: abroadster-ios-001
-3. Paste listing text from: store/APP_STORE_LISTING.txt
-4. Privacy Policy URL (paste exactly):
-   https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/privacy.html
-5. Upload screenshots (see section D)
-6. Upload 1024×1024 marketing icon (same as assets/app-icon-1024.png)
-7. Age rating questionnaire → 13+
-8. App Privacy answers → see store/APP_STORE_LISTING.txt
-
+https://appstoreconnect.apple.com
+New App → iOS → Abroadster → Bundle ID com.abroadster.app
+Paste text from store/APP_STORE_LISTING.txt
+Privacy URL:
+https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/privacy.html
+Upload 1024 icon: assets/app-icon-1024.png
+Upload iPhone screenshots (6.7" at minimum)
 
 ============================================================
-C) Submit the IPA from Windows — NO MAC
+3) Build iOS (interactive Apple login) — REQUIRED ONCE
 ============================================================
-After the iOS build finishes:
+cd C:\Users\SamiM\AbroadsterSummerGO
+$m = Select-String -Path .env -Pattern '^EXPO_TOKEN=(.+)$'
+$env:EXPO_TOKEN = $m.Matches.Groups[1].Value.Trim()
+$env:EAS_NO_VCS = "1"
+npx eas-cli build --platform ios --profile production
 
-  $env:EXPO_TOKEN="..."
-  $env:EAS_NO_VCS="1"
-  npx eas-cli@latest submit --platform ios --latest --profile production
-
-Follow prompts to pick the App Store Connect app.
-Then in ASC: select the build → Add for Review → Submit.
-
+Log in with Apple ID → select Team → let Expo manage certs/profiles/APNs.
 
 ============================================================
-D) Screenshots (can do without Mac)
+4) Submit IPA to ASC
 ============================================================
-Options:
-  - Record from your Android preview build / Expo web and crop to iPhone sizes
-  - Use a design tool to frame UI into iPhone 6.7" and 6.1" templates
-  - Later on MacBook: Simulator screenshots (optional)
+npx eas-cli submit --platform ios --latest --profile production
 
-Required typical sizes ASC will ask for:
-  - 6.7" (iPhone 15 Pro Max class)
-  - Often also 6.1"
-
+Then in ASC: attach build → Add for Review → Submit.
 
 ============================================================
-E) Only if you want Xcode later (OPTIONAL)
+Already done in the project
 ============================================================
-MacBook is optional for:
-  - Local debugging with Instruments
-  - Capturing Simulator screenshots
-NOT required for build or submit when using EAS.
-
-
-============================================================
-Already done in the project for you
-============================================================
-✓ Real 1024×1024 app icon + splash + Android adaptive icons
-✓ Privacy Manifests in app.json
-✓ Production env on EAS (Supabase, Mapbox, DEMO_SEED=0, legal URL)
-✓ Fake map seed users disabled in production builds
-✓ Account deletion + in-app Terms/Privacy
-✓ Public Privacy Policy + Terms hosted
-✓ Listing copy drafted in store/APP_STORE_LISTING.txt
-✓ Android preview build already submitted earlier
-✓ Push/projectId linked to Expo
+✓ Native map (Apple Maps) for device builds
+✓ Privacy manifests, encryption flag, camera/photo strings
+✓ No unused GPS permission string
+✓ Account deletion + Report/Block
+✓ Hosted Privacy / Terms / Delete-account pages
+✓ Production EAS env with DEMO_SEED=0
+✓ Listing + review notes drafted

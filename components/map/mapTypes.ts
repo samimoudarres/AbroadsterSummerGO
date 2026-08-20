@@ -20,6 +20,14 @@ export interface AbroadsterMapProps {
   onPersonPress: (user: UserProfile) => void;
   onTripPress: (trip: TripPin) => void;
   onProgramPress: (program: ProgramPin) => void;
+  /** Multi-entity cluster tap (zoom / open drawer). Optional. */
+  onClusterPress?: (payload: {
+    latitude: number;
+    longitude: number;
+    people: UserProfile[];
+    trips: TripPin[];
+    programs: ProgramPin[];
+  }) => void;
   flyTo?: MapCamera | null;
   userLocation?: { latitude: number; longitude: number } | null;
   /** Temporary pin from place search (city / country / landmark). */
@@ -28,4 +36,5 @@ export interface AbroadsterMapProps {
   mapActive?: boolean;
   /** Highlight / keep visible the person selected from the list. */
   selectedPersonId?: string | null;
+  onMapPress?: () => void;
 }

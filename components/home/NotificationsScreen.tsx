@@ -10,9 +10,11 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { colors, fonts } from '../../constants/theme';
 import type { ChatNotification, ChatProfile } from '../../data/chatTypes';
 import { chatRepo, initChat, subscribeChat } from '../../lib/chat/repository';
+import { useEdgeSwipeBack } from '../../lib/gestures/useEdgeSwipeBack';
 import { timeAgo } from '../../lib/feed/timeAgo';
 import { toImageSource } from '../../lib/images';
 import { usePhoneTopPad } from '../../lib/layout/safeArea';
@@ -175,6 +177,7 @@ export function NotificationsScreen({
   onNavigate,
 }: NotificationsScreenProps) {
   const topPad = usePhoneTopPad(0);
+  const edgeBack = useEdgeSwipeBack(onClose);
   const [items, setItems] = useState<ChatNotification[]>([]);
   const [profiles, setProfiles] = useState<Record<string, ChatProfile>>({});
   const [previews, setPreviews] = useState<Record<string, string>>({});
@@ -448,6 +451,7 @@ export function NotificationsScreen({
   };
 
   return (
+    <GestureDetector gesture={edgeBack}>
     <View style={[styles.root, { paddingTop: topPad }]}>
       <View style={styles.header}>
         <Pressable onPress={onClose} hitSlop={12} style={styles.back}>
@@ -662,6 +666,7 @@ export function NotificationsScreen({
         }}
       />
     </View>
+    </GestureDetector>
   );
 }
 

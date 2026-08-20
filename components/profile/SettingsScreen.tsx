@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,11 +11,14 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { colors, fonts } from '../../constants/theme';
 import type { ChatProfile } from '../../data/chatTypes';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { chatRepo } from '../../lib/chat/repository';
 import { confirmChoice } from '../../lib/confirm';
+import { LEGAL_URLS } from '../../lib/legal/urls';
+import { useEdgeSwipeBack } from '../../lib/gestures/useEdgeSwipeBack';
 import {
   NOTIF_PREF_LABELS,
   type NotifPrefKey,
@@ -48,6 +52,7 @@ export function SettingsScreen({
   onAccountDeleted,
 }: SettingsScreenProps) {
   const { signOut, deleteAccount } = useAuth();
+  const edgeBack = useEdgeSwipeBack(onClose);
   const [settings, setSettings] = useState<UserSettings>(emptyUserSettings());
   const [blocked, setBlocked] = useState<ChatProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,6 +172,7 @@ export function SettingsScreen({
   };
 
   return (
+    <GestureDetector gesture={edgeBack}>
     <View style={styles.overlay}>
       <AbroadsterTopBar
         left={
@@ -253,6 +259,13 @@ export function SettingsScreen({
 
           <Section title="Support">
             <Row
+              label="Contact support"
+              icon="mail-outline"
+              onPress={() => {
+                void Linking.openURL(`mailto:${LEGAL_URLS.supportEmail}`);
+              }}
+            />
+            <Row
               label="Terms of Use"
               icon="document-text-outline"
               onPress={() => onOpenLegal('terms')}
@@ -261,6 +274,16 @@ export function SettingsScreen({
               label="Privacy Policy"
               icon="shield-checkmark-outline"
               onPress={() => onOpenLegal('privacy')}
+            />
+            <Row
+              label="Age requirement (13+)"
+              icon="person-outline"
+              onPress={() => {
+                Alert.alert(
+                  'Age assurance',
+                  'Abroadster is for users 13 and older. During sign-up, you must enter your date of birth. Users under 13 cannot create an account or access social features.\n\nTo see this check: sign out, tap Create account, and continue until the Verify your age step.',
+                );
+              }}
             />
           </Section>
 
@@ -283,6 +306,7 @@ export function SettingsScreen({
         </ScrollView>
       )}
     </View>
+    </GestureDetector>
   );
 }
 

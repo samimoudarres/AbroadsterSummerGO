@@ -6,8 +6,14 @@ import {
   hasMapboxToken,
   MAPBOX_TOKEN,
 } from '../../lib/mapConfig';
+import { clusterMapPins, type ClusterGlowKind } from '../../lib/map/clusterPins';
 import { colors } from '../../constants/theme';
-import type { ProgramPin, TripPin, UserProfile } from '../../data/types';
+import type {
+  ImageSource,
+  ProgramPin,
+  TripPin,
+  UserProfile,
+} from '../../data/types';
 import type { AbroadsterMapProps } from './mapTypes';
 
 export type { AbroadsterMapProps } from './mapTypes';
@@ -67,6 +73,13 @@ async function waitForSize(el: HTMLElement): Promise<void> {
   }
 }
 
+function glowForKind(kind: ClusterGlowKind): string {
+  if (kind === 'upcoming') return colors.statusOrangeGlow;
+  if (kind === 'planning') return colors.statusYellowGlow;
+  if (kind === 'program') return colors.programBlue;
+  return colors.statusGreenGlow;
+}
+
 export default function AbroadsterMap({
   styleMode,
   people,
@@ -76,6 +89,7 @@ export default function AbroadsterMap({
   onPersonPress,
   onTripPress,
   onProgramPress,
+  onClusterPress,
   flyTo,
   userLocation,
   searchPin,
@@ -89,13 +103,23 @@ export default function AbroadsterMap({
   );
   const markerLibRef = useRef<any>(null);
   const onRegionChangeRef = useRef(onRegionChange);
-  const callbacksRef = useRef({ onPersonPress, onTripPress, onProgramPress });
+  const callbacksRef = useRef({
+    onPersonPress,
+    onTripPress,
+    onProgramPress,
+    onClusterPress,
+  });
   const styleModeRef = useRef(styleMode);
   styleModeRef.current = styleMode;
 
   useEffect(() => {
     onRegionChangeRef.current = onRegionChange;
-    callbacksRef.current = { onPersonPress, onTripPress, onProgramPress };
+    callbacksRef.current = {
+      onPersonPress,
+      onTripPress,
+      onProgramPress,
+      onClusterPress,
+    };
   });
 
   useEffect(() => {
@@ -248,52 +272,117 @@ export default function AbroadsterMap({
         next.set(key, { marker, sig });
       };
 
-      for (const program of programs) {
-        const logoUri = (await ensureImageUri(program.logo)) || '';
+      const zoom = mapRef.current.getZoom?.() ?? DEFAULT_CENTER.zoom;
+      const clusters = clusterMapPins(people, trips, programs, zoom);
+
+      for (const cluster of clusters) {
+        if (cluster.isSingleton && cluster.members.length === 1) {
+          const m = cluster.members[0];
+          if (m.kind === 'program') {
+            const program = m.program;
+            const logoUri = (await ensureImageUri(program.logo)) || '';
+            if (cancelled) return;
+            const key = cluster.id;
+            const sig = `${logoUri}|${program.accent || ''}|${program.latitude}|${program.longitude}`;
+            const el = buildProgramMarker(program, logoUri);
+            el.onclick = (e) => {
+              e.stopPropagation();
+              callbacksRef.current.onProgramPress(program);
+            };
+            upsert(key, sig, program.longitude, program.latitude, el, 'bottom');
+          } else if (m.kind === 'trip') {
+            const trip = m.trip;
+            const glow =
+              trip.status === 'upcoming'
+                ? colors.statusOrangeGlow
+                : colors.statusYellowGlow;
+            const avatarUris = await Promise.all(
+              trip.members.map((mem) => ensureImageUri(mem.avatar)),
+            );
+            if (cancelled) return;
+            const key = cluster.id;
+            const labels = shortNames(trip);
+            const sig = `${trip.status}|${avatarUris.join(',')}|${trip.latitude}|${trip.longitude}|${labels.title}|${labels.subtitle}`;
+            const el = buildGroupMarker(avatarUris, glow, labels);
+            el.onclick = (e) => {
+              e.stopPropagation();
+              callbacksRef.current.onTripPress(trip);
+            };
+            upsert(key, sig, trip.longitude, trip.latitude, el, 'bottom');
+          } else {
+            const person = m.person;
+            const rawAvatar = await ensureImageUri(person.avatar);
+            const { defaultAvatarUrl } = await import('../../lib/images');
+            const avatarUri =
+              rawAvatar ||
+              defaultAvatarUrl(person.fullName || person.firstName);
+            if (cancelled) return;
+            const key = cluster.id;
+            const selected = selectedPersonId === person.id;
+            const sig = `${avatarUri}|${person.latitude}|${person.longitude}|${person.isCurrentUser ? 'me' : ''}|${selected ? 'sel' : ''}`;
+            const el = buildPersonMarker(person, avatarUri, selected);
+            el.onclick = (e) => {
+              e.stopPropagation();
+              callbacksRef.current.onPersonPress(person);
+            };
+            upsert(key, sig, person.longitude, person.latitude, el, 'bottom');
+          }
+          continue;
+        }
+
+        const faceUris = (
+          await Promise.all(
+            cluster.faceSources.map((src) =>
+              ensureImageUri(src as ImageSource),
+            ),
+          )
+        ).filter((uri): uri is string => Boolean(uri));
         if (cancelled) return;
-        const key = `program:${program.id}`;
-        const sig = `${logoUri}|${program.accent || ''}|${program.latitude}|${program.longitude}`;
-        const el = buildProgramMarker(program, logoUri);
+        const glow = glowForKind(cluster.glowKind);
+        const labels = {
+          title: cluster.title,
+          subtitle: cluster.subtitle ?? '',
+        };
+        const key = cluster.id;
+        const sig = `${cluster.glowKind}|${faceUris.join(',')}|${labels.title}|${labels.subtitle}|${cluster.latitude}|${cluster.longitude}|${zoom}`;
+        const el = buildGroupMarker(faceUris, glow, labels);
         el.onclick = (e) => {
           e.stopPropagation();
-          callbacksRef.current.onProgramPress(program);
+          const press = callbacksRef.current.onClusterPress;
+          if (press) {
+            press({
+              latitude: cluster.latitude,
+              longitude: cluster.longitude,
+              people: cluster.members
+                .filter((mem) => mem.kind === 'person')
+                .map((mem) => (mem as { kind: 'person'; person: UserProfile }).person),
+              trips: cluster.members
+                .filter((mem) => mem.kind === 'trip')
+                .map((mem) => (mem as { kind: 'trip'; trip: TripPin }).trip),
+              programs: cluster.members
+                .filter((mem) => mem.kind === 'program')
+                .map(
+                  (mem) =>
+                    (mem as { kind: 'program'; program: ProgramPin }).program,
+                ),
+            });
+            return;
+          }
+          const map = mapRef.current;
+          if (!map) return;
+          map.flyTo({
+            center: [cluster.longitude, cluster.latitude],
+            zoom: map.getZoom() + 1.5,
+          });
         };
-        upsert(key, sig, program.longitude, program.latitude, el, 'bottom');
-      }
-
-      for (const trip of trips) {
-        const glow =
-          trip.status === 'upcoming'
-            ? colors.statusOrangeGlow
-            : colors.statusYellowGlow;
-        const avatarUris = await Promise.all(
-          trip.members.map((m) => ensureImageUri(m.avatar)),
+        upsert(
+          key,
+          sig,
+          cluster.longitude,
+          cluster.latitude,
+          el,
+          'bottom',
         );
-        if (cancelled) return;
-        const key = `trip:${trip.id}`;
-        const sig = `${trip.status}|${avatarUris.join(',')}|${trip.latitude}|${trip.longitude}|${shortNames(trip)}`;
-        const el = buildGroupMarker(avatarUris, glow, shortNames(trip));
-        el.onclick = (e) => {
-          e.stopPropagation();
-          callbacksRef.current.onTripPress(trip);
-        };
-        upsert(key, sig, trip.longitude, trip.latitude, el, 'bottom');
-      }
-
-      for (const person of people) {
-        const rawAvatar = await ensureImageUri(person.avatar);
-        const { defaultAvatarUrl } = await import('../../lib/images');
-        const avatarUri = rawAvatar || defaultAvatarUrl(person.fullName || person.firstName);
-        if (cancelled) return;
-        const key = `person:${person.id}`;
-        const selected = selectedPersonId === person.id;
-        const sig = `${avatarUri}|${person.latitude}|${person.longitude}|${person.isCurrentUser ? 'me' : ''}|${selected ? 'sel' : ''}`;
-        const el = buildPersonMarker(person, avatarUri, selected);
-        el.onclick = (e) => {
-          e.stopPropagation();
-          callbacksRef.current.onPersonPress(person);
-        };
-        upsert(key, sig, person.longitude, person.latitude, el, 'bottom');
       }
 
       // GPS blue dot only when "me" isn't already shown as a profile pin
@@ -374,6 +463,8 @@ export default function AbroadsterMap({
     if (map.loaded()) ready();
     else map.once('load', ready);
     map.on('style.load', ready);
+    // Re-cluster when zoom/pan settles (zoom read inside renderMarkers)
+    map.on('moveend', ready);
 
     // Retry shortly in case map loads after markers effect first runs
     const retry = setTimeout(ready, 800);
@@ -382,6 +473,7 @@ export default function AbroadsterMap({
       cancelled = true;
       clearTimeout(retry);
       map.off('style.load', ready);
+      map.off('moveend', ready);
     };
   }, [people, trips, programs, userLocation, searchPin, mapActive, selectedPersonId]);
 

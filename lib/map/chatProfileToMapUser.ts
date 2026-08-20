@@ -12,6 +12,8 @@ export function chatProfileToMapUser(
     liveLng?: number | null;
   },
 ): UserProfile | null {
+  const liveLat = opts?.liveLat ?? p.liveLatitude ?? null;
+  const liveLng = opts?.liveLng ?? p.liveLongitude ?? null;
   const resolved = resolveProfileMapCoords({
     id: p.id,
     hostCity: p.hostCity,
@@ -19,8 +21,9 @@ export function chatProfileToMapUser(
     studyAbroadProgram: p.studyAbroadProgram,
     hostLatitude: p.hostLatitude,
     hostLongitude: p.hostLongitude,
-    liveLatitude: opts?.liveLat,
-    liveLongitude: opts?.liveLng,
+    liveLatitude: liveLat,
+    liveLongitude: liveLng,
+    liveLocationLabel: p.liveLocationLabel,
     isCurrentUser: opts?.isCurrentUser,
   });
   if (!resolved) return null;
@@ -42,8 +45,8 @@ export function chatProfileToMapUser(
     isFriend: opts?.isCurrentUser ? true : Boolean(opts?.isFriend),
     isCurrentUser: Boolean(opts?.isCurrentUser),
     locationPrivacy: resolved.source === 'live' ? 'exact' : 'city',
-    liveLatitude: opts?.liveLat ?? null,
-    liveLongitude: opts?.liveLng ?? null,
+    liveLatitude: liveLat,
+    liveLongitude: liveLng,
     latitude: resolved.latitude,
     longitude: resolved.longitude,
     locationLabel: resolved.locationLabel,

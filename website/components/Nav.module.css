@@ -1,0 +1,137 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--teal);
+  box-shadow: 0 0.33px 0 #a6a6aa;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.2rem 0;
+  line-height: 0;
+}
+
+.brand {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.logo {
+  height: var(--nav-logo-h);
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.pill {
+  display: none;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.35rem 1.15rem;
+  border-radius: 999px;
+  background: rgba(243, 221, 197, 0.25);
+  line-height: 1.2;
+}
+
+.link {
+  color: var(--white);
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: 700;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.link:hover,
+.active {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.badgeDesk {
+  display: none;
+}
+
+.badgeImg {
+  height: var(--nav-badge-h) !important;
+  width: auto !important;
+  display: block;
+}
+
+.menu {
+  border: 1.5px solid rgba(243, 221, 197, 0.35);
+  background: rgba(243, 221, 197, 0.12);
+  color: var(--cream);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 1rem;
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.mobile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.35rem 1.25rem 0.85rem;
+  border-top: 1px solid rgba(243, 221, 197, 0.15);
+  background: var(--teal);
+  line-height: 1.2;
+}
+
+.mlink {
+  padding: 0.55rem 0.4rem;
+  color: var(--cream);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.mbadge {
+  padding: 0.35rem 0 0.1rem;
+  width: fit-content;
+}
+
+.mbadge img {
+  height: var(--nav-badge-h) !important;
+  width: auto !important;
+}
+
+@media (min-width: 900px) {
+  .pill {
+    display: flex;
+  }
+
+  .badgeDesk {
+    display: inline-block;
+  }
+
+  .menu,
+  .mobile {
+    display: none;
+  }
+}
+
+@media (max-width: 899px) {
+  .bar {
+    padding: 0.15rem 0;
+  }
+
+  .logo {
+    height: 84px;
+  }
+}

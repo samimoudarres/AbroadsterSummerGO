@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Keyboard,
   Platform,
   StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import BottomSheet from '@gorhom/bottom-sheet';
 import AbroadsterMap from './AbroadsterMap';
@@ -38,6 +40,11 @@ import type { LatLngBounds } from '../../lib/geo';
 import { reverseGeocodeCity, searchPlaces, type PlaceSuggestion } from '../../lib/geocode';
 import { DEFAULT_CENTER, hasMapboxToken, MAPBOX_TOKEN } from '../../lib/mapConfig';
 import { resolveMapLocation, scatterAround } from '../../lib/userLocation';
+import {
+  requestLocationPermission,
+  watchDeviceLocation,
+} from '../../lib/location/deviceLocation';
+import { chatProfileToMapUser } from '../../lib/map/chatProfileToMapUser';
 import { resolveTripCoords } from '../../lib/tripCoords';
 import { usePhoneTopPad } from '../../lib/layout/safeArea';
 import {
@@ -174,6 +181,34 @@ export function MapScreen({
   const [layerFilter, setLayerFilter] = useState<MapLayerFilter>('all');
   const [showLayerMenu, setShowLayerMenu] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem('abroadster.mapStyleMode');
+        if (
+          !cancelled &&
+          (saved === 'regular' || saved === 'satellite')
+        ) {
+          setStyleMode(saved);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggleStyleMode = useCallback(() => {
+    setStyleMode((m) => {
+      const next = m === 'regular' ? 'satellite' : 'regular';
+      void AsyncStorage.setItem('abroadster.mapStyleMode', next).catch(() => {});
+      return next;
+    });
+  }, []);
+
   const [center, setCenter] = useState({
     latitude: DEFAULT_CENTER.latitude,
     longitude: DEFAULT_CENTER.longitude,
@@ -195,7 +230,7 @@ export function MapScreen({
   } | null>(null);
 
   const [flyTo, setFlyTo] = useState<MapCamera | null>(null);
-  /** Account profile pin (host city from backend) — default view + recenter target. */
+  /** Live GPS when Exact privacy / permission granted; else host city. */
   const [userLocation, setUserLocation] = useState<{
     latitude: number;
     longitude: number;
@@ -204,6 +239,11 @@ export function MapScreen({
     latitude: number;
     longitude: number;
   } | null>(null);
+  const hostPinRef = useRef<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const locationPrivacyRef = useRef<'exact' | 'city' | 'hidden'>('city');
   const didCenterOnMeRef = useRef(false);
 
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
@@ -588,6 +628,7 @@ export function MapScreen({
           '../../lib/map/chatProfileToMapUser'
         );
         const cam = schoolMapTarget(chip.label);
+        const live = userLocationRef.current;
         const mapped: UserProfile[] = [];
         for (const p of profiles) {
           // Double-check client-side so a loose backend match can't leak through
@@ -597,11 +638,17 @@ export function MapScreen({
               : matchesHomeUniversity(p.homeUniversity || '', chip.label);
           if (!belongs) continue;
 
+          const isMe = p.id === me.id;
           let pin = chatProfileToMapUser(p, {
-            isFriend: friendSet.has(p.id) || p.id === me.id,
-            isCurrentUser: p.id === me.id,
+            isFriend: friendSet.has(p.id) || isMe,
+            isCurrentUser: isMe,
+            ...(isMe && live
+              ? { liveLat: live.latitude, liveLng: live.longitude }
+              : {}),
           });
           if (!pin && cam) {
+            // Never invent a school-centered pin for the signed-in user.
+            if (p.id === me.id) continue;
             const jittered = scatterAround(
               cam.latitude,
               cam.longitude,
@@ -628,7 +675,22 @@ export function MapScreen({
         setSchoolFilterTotal(mapped.length);
         setRosterPeople((prev) => {
           const byId = new Map(prev.map((u) => [u.id, u]));
-          for (const u of mapped) byId.set(u.id, u);
+          const liveMe = prev.find((u) => u.isCurrentUser);
+          for (const u of mapped) {
+            if (u.isCurrentUser && liveMe) {
+              byId.set(u.id, {
+                ...u,
+                latitude: liveMe.latitude,
+                longitude: liveMe.longitude,
+                liveLatitude: liveMe.liveLatitude ?? liveMe.latitude,
+                liveLongitude: liveMe.liveLongitude ?? liveMe.longitude,
+                locationPrivacy: liveMe.locationPrivacy,
+                locationLabel: liveMe.locationLabel,
+              });
+            } else {
+              byId.set(u.id, u);
+            }
+          }
           return [...byId.values()];
         });
         sheetRef.current?.snapToIndex(2);
@@ -706,17 +768,15 @@ export function MapScreen({
   }, [center.latitude, center.longitude]);
 
   // Center on this account's profile pin from the backend (host city / program).
-  // Device GPS is not used for the default view or the re-center target.
+  // When Exact privacy + GPS permission, continuous watch updates the me pin.
   useEffect(() => {
     let cancelled = false;
+    let sub: { remove: () => void } | null = null;
     (async () => {
       try {
         await initChat();
         const me = await chatRepo.getMe();
         if (cancelled) return;
-        const { chatProfileToMapUser } = await import(
-          '../../lib/map/chatProfileToMapUser'
-        );
         const mePin = chatProfileToMapUser(me, {
           isFriend: true,
           isCurrentUser: true,
@@ -727,8 +787,11 @@ export function MapScreen({
           latitude: mePin.latitude,
           longitude: mePin.longitude,
         };
+        hostPinRef.current = home;
         userLocationRef.current = home;
         setUserLocation(home);
+        locationPrivacyRef.current = mePin.locationPrivacy ?? 'city';
+
         if (!didCenterOnMeRef.current) {
           didCenterOnMeRef.current = true;
           setCenter(home);
@@ -743,17 +806,90 @@ export function MapScreen({
           const others = prev.filter((u) => u.id !== me.id);
           return [mePin, ...others];
         });
+
+        const granted = await requestLocationPermission();
+        if (cancelled || !granted) return;
+
+        // Permission granted → Exact mode for this session (When-In-Use only).
+        locationPrivacyRef.current = 'exact';
+        let lastPublishAt = 0;
+        let lastPublishLabel = '';
+        sub = await watchDeviceLocation((coords) => {
+          if (cancelled) return;
+          if (locationPrivacyRef.current !== 'exact') return;
+          const next = {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          };
+          userLocationRef.current = next;
+          setUserLocation(next);
+
+          const applyMe = (label?: string) => {
+            const patch = (u: UserProfile) =>
+              u.isCurrentUser
+                ? {
+                    ...u,
+                    locationPrivacy: 'exact' as const,
+                    liveLatitude: next.latitude,
+                    liveLongitude: next.longitude,
+                    latitude: next.latitude,
+                    longitude: next.longitude,
+                    locationLabel: label || u.locationLabel,
+                  }
+                : u;
+            setRosterPeople((prev) => prev.map(patch));
+            setFriendPeople((prev) => prev.map(patch));
+            setSchoolFilterCohort((prev) =>
+              prev && prev.length > 0 ? prev.map(patch) : prev,
+            );
+          };
+          applyMe();
+
+          void (async () => {
+            try {
+              const geo = await reverseGeocodeCity(
+                next.latitude,
+                next.longitude,
+                hasMapboxToken ? MAPBOX_TOKEN : undefined,
+              );
+              if (cancelled) return;
+              const label = geo.countryName
+                ? `${geo.cityName}, ${geo.countryName}`
+                : geo.cityName;
+              applyMe(label);
+              const now = Date.now();
+              if (
+                label !== lastPublishLabel ||
+                now - lastPublishAt > 90_000
+              ) {
+                lastPublishAt = now;
+                lastPublishLabel = label;
+                await chatRepo.publishLiveLocation({
+                  latitude: next.latitude,
+                  longitude: next.longitude,
+                  locationLabel: label,
+                });
+              }
+            } catch {
+              // keep pin on GPS even if geocode/publish fails
+            }
+          })();
+        });
       } catch {
         // Friends load / demo seed still places a pin when available
       }
     })();
     return () => {
       cancelled = true;
+      sub?.remove();
     };
   }, []);
 
   const flyToMyAccountPin = useCallback(() => {
-    const target = userLocationRef.current ?? userLocation;
+    const target =
+      locationPrivacyRef.current === 'exact'
+        ? userLocationRef.current ?? hostPinRef.current ?? userLocation
+        : hostPinRef.current ?? userLocation;
     if (!target) return;
     setFlyTo({ ...target, zoom: 12.5 });
     setCenter(target);
@@ -915,7 +1051,7 @@ export function MapScreen({
     const base = visible.listItems;
     // School filter: trust the cohort list only — don't append unrelated search hits
     if (selectedFilters.length > 0) {
-      return [...placeItems, ...base.filter((i) => i.kind === 'person')];
+      return [...base.filter((i) => i.kind === 'person'), ...placeItems];
     }
 
     const seenPeople = new Set(
@@ -936,7 +1072,15 @@ export function MapScreen({
       });
     }
 
-    return [...placeItems, ...extraPeople, ...base];
+    // People → Places → (schools/trips already in base after people)
+    const peopleFirst = [
+      ...extraPeople,
+      ...base.filter((i) => i.kind === 'person' || i.kind === 'trip'),
+    ];
+    const rest = base.filter(
+      (i) => i.kind !== 'person' && i.kind !== 'trip',
+    );
+    return [...peopleFirst, ...placeItems, ...rest];
   }, [placeHits, remotePeople, visible.listItems, selectedFilters.length]);
 
   return (
@@ -961,11 +1105,23 @@ export function MapScreen({
           onPersonPress={openUser}
           onTripPress={openTrip}
           onProgramPress={openProgram}
+          onClusterPress={(payload) => {
+            setFlyTo({
+              latitude: payload.latitude,
+              longitude: payload.longitude,
+              zoom: 14.2,
+            });
+            sheetRef.current?.snapToIndex(2);
+            if (payload.people[0]) {
+              setSelectedUser(payload.people[0]);
+            }
+          }}
           flyTo={flyTo}
           userLocation={userLocation}
           searchPin={searchPin}
           mapActive={mapActive}
           selectedPersonId={selectedUser?.id ?? null}
+          onMapPress={() => Keyboard.dismiss()}
         />
 
         <View style={[styles.topOverlay, { top: topInset }]} pointerEvents="box-none">
@@ -1007,9 +1163,7 @@ export function MapScreen({
           styleMode={styleMode}
           layerFilter={layerFilter}
           showLayerMenu={showLayerMenu}
-          onToggleStyle={() =>
-            setStyleMode((m) => (m === 'regular' ? 'satellite' : 'regular'))
-          }
+          onToggleStyle={toggleStyleMode}
           onToggleLayerMenu={() => setShowLayerMenu((v) => !v)}
           onSelectLayer={(layer) => {
             setLayerFilter(layer);
@@ -1110,16 +1264,6 @@ export function MapScreen({
             setActiveTab(tab);
             if (tab === 'profile') {
               openProfile(getUserById('user-me') ?? null);
-            } else if (tab !== 'map') {
-              Alert.alert(
-                tab === 'home'
-                  ? 'Home Feed'
-                  : tab === 'messages'
-                    ? 'Messages'
-                    : 'Trips',
-                'This tab is coming next. Map is fully interactive now.',
-              );
-              setActiveTab('map');
             }
           }}
         />
@@ -1138,11 +1282,6 @@ export function MapScreen({
         onMessage={() => {
           setShowPersonSheet(false);
           if (selectedUser && onMessageUser) onMessageUser(selectedUser.id);
-          else
-            Alert.alert(
-              'Message',
-              `Messaging ${selectedUser?.firstName} is coming next.`,
-            );
         }}
       />
 

@@ -16,10 +16,12 @@ import {
   isOwnSender,
   subscribeChat,
 } from '../../lib/chat/repository';
+import { useEdgeSwipeBack } from '../../lib/gestures/useEdgeSwipeBack';
 import { usePhoneTopPad } from '../../lib/layout/safeArea';
 import { FeedPostCard } from '../home/FeedPostCard';
 import { SharePostSheet } from '../home/SharePostSheet';
 import { StampersSheet } from '../home/StampersSheet';
+import { GestureDetector } from 'react-native-gesture-handler';
 
 interface ProfilePostsViewerProps {
   posts: FeedPost[];
@@ -50,6 +52,7 @@ export function ProfilePostsViewer({
   onEditPost,
 }: ProfilePostsViewerProps) {
   const topPad = usePhoneTopPad(4);
+  const edgeBack = useEdgeSwipeBack(onClose);
   const listRef = useRef<FlatList<FeedPost>>(null);
   const [posts, setPosts] = useState(initialPosts);
   const [sharePost, setSharePost] = useState<FeedPost | null>(null);
@@ -103,6 +106,7 @@ export function ProfilePostsViewer({
   );
 
   return (
+    <GestureDetector gesture={edgeBack}>
     <View style={styles.root}>
       <View style={[styles.topBar, { paddingTop: topPad }]}>
         <Pressable onPress={onClose} hitSlop={12} style={styles.iconBtn}>
@@ -184,6 +188,7 @@ export function ProfilePostsViewer({
         }}
       />
     </View>
+    </GestureDetector>
   );
 }
 

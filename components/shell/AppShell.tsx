@@ -1,19 +1,22 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import * as Linking from 'expo-linking';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { MapScreen } from '../map/MapScreen';
 import { CommunityScreen } from '../community/CommunityScreen';
 import { TripsScreen } from '../trips/TripsScreen';
 import { CreateTripScreen } from '../trips/CreateTripScreen';
 import { TripAlbumScreen } from '../trips/TripAlbumScreen';
 import { TaggedTripSheet } from '../trips/TaggedTripSheet';
 import { HomeFeedScreen } from '../home/HomeFeedScreen';
-import { NotificationsScreen } from '../home/NotificationsScreen';
+import {
+  NotificationsScreen,
+  type NotificationNav,
+} from '../home/NotificationsScreen';
 import { CreatePostScreen } from '../home/CreatePostScreen';
 import { BottomNav } from '../navigation/BottomNav';
 import { ProfileModal } from '../profile/ProfileModal';
@@ -28,9 +31,16 @@ import { warmOwnProfileCache } from '../../lib/profile/profileCache';
 import { schoolMapTarget } from '../../lib/schoolMapTarget';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { useBottomNavClearance } from '../../lib/layout/safeArea';
+import { startNotificationResponseRouting } from '../../lib/push/notificationRouting';
+import { parseTripInviteTokenFromUrl } from '../../lib/trips/inviteLinks';
 import type { UserProfile } from '../../data/types';
 import type { ChatProfile, ChatTrip, FeedPost } from '../../data/chatTypes';
 import type { MapCamera } from '../map/mapTypes';
+import { BRAND_TEAL } from '../../constants/theme';
+
+const MapScreen = lazy(() =>
+  import('../map/MapScreen').then((m) => ({ default: m.MapScreen })),
+);
 
 type TabKey = 'home' | 'messages' | 'trips' | 'map' | 'profile';
 
@@ -92,6 +102,8 @@ export function AppShell() {
   const [showProfile, setShowProfile] = useState(false);
   const [showCreateTrip, setShowCreateTrip] = useState(false);
   const [albumTripId, setAlbumTripId] = useState<string | null>(null);
+  /** Invite token from deep link — album can offer Join via link. */
+  const [albumInviteToken, setAlbumInviteToken] = useState<string | null>(null);
   /** Trip tagged on a post — bottom sheet preview */
   const [taggedTripId, setTaggedTripId] = useState<string | null>(null);
   /** After creating a trip, jump to messages so the new trip channel is findable */
@@ -205,6 +217,84 @@ export function AppShell() {
     }
   };
 
+  const handleNotificationNav = useCallback(
+    (nav: NotificationNav) => {
+      setShowNotifications(false);
+      if (nav.type === 'profile') {
+        void openProfileById(nav.userId);
+      } else if (nav.type === 'album') {
+        setAlbumTripId(nav.tripId);
+      } else if (nav.type === 'trip') {
+        setAlbumTripId(nav.tripId);
+      } else if (nav.type === 'map') {
+        setActiveTab('map');
+      } else if (nav.type === 'post') {
+        setFocusPostId(nav.postId);
+        setActiveTab('home');
+      } else if (nav.type === 'dm') {
+        setDmUserId(nav.userId);
+        setDmThreadIdIntent(nav.threadId ?? null);
+        setActiveTab('messages');
+      } else if (nav.type === 'channel') {
+        setFocusSchoolChannel({
+          channelId: nav.channelId,
+          communityId: nav.communityId,
+          slug: nav.slug,
+        });
+        setActiveTab('messages');
+      }
+    },
+    // openProfileById is stable enough for this shell lifetime
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  useEffect(() => {
+    return startNotificationResponseRouting(handleNotificationNav);
+  }, [handleNotificationNav]);
+
+  // Trip invite deep links: abroadster://trip/TOKEN or HTTPS invite.html?t=
+  useEffect(() => {
+    let alive = true;
+    const openInvite = async (url: string | null) => {
+      if (!url || !alive) return;
+      const token = parseTripInviteTokenFromUrl(url);
+      if (!token || token === 'preview') return;
+      try {
+        await initChat();
+        let trip = await chatRepo.resolveTripInviteToken(token);
+        if (!trip) {
+          Alert.alert('Invite not found', 'This trip invite link is invalid or expired.');
+          return;
+        }
+        // Auto-join via token when possible; still open album either way
+        try {
+          const joined = await chatRepo.joinTripViaInviteToken(token);
+          if (joined) trip = joined;
+        } catch {
+          // May need host approval / full — still show album
+        }
+        if (!alive) return;
+        setAlbumInviteToken(token);
+        setAlbumTripId(trip.id);
+        setActiveTab('trips');
+      } catch (e: any) {
+        Alert.alert(
+          'Couldn’t open invite',
+          e?.message ?? 'Try again after signing in.',
+        );
+      }
+    };
+    void Linking.getInitialURL().then((url) => void openInvite(url));
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      void openInvite(url);
+    });
+    return () => {
+      alive = false;
+      sub.remove();
+    };
+  }, []);
+
   // Prefetch own profile so the nav tab opens without a blank loading state
   useEffect(() => {
     let cancelled = false;
@@ -272,27 +362,35 @@ export function AppShell() {
           style={[styles.page, !showMap && styles.pageHidden]}
           pointerEvents={showMap ? 'auto' : 'none'}
         >
-          <MapScreen
-            hideBottomNav
-            mapActive={showMap}
-            focusTarget={mapFocus}
-            onConsumedFocusTarget={() => setMapFocus(null)}
-            recenterNonce={mapRecenterNonce}
-            resetNonce={mapResetNonce}
-            schoolNav={mapSchoolNav}
-            onConsumedSchoolNav={() => setMapSchoolNav(null)}
-            firstMapOnboarding={firstMapOnboarding}
-            onConsumedFirstMapOnboarding={() => setFirstMapOnboarding(false)}
-            onMessageUser={(userId) => {
-              setDmUserId(userId);
-              setActiveTab('messages');
-            }}
-            onOpenProfile={(user) => {
-              void openProfileById(user.id);
-            }}
-            onCreateTrip={() => setShowCreateTrip(true)}
-            onOpenTrip={(tripId) => setAlbumTripId(tripId)}
-          />
+          <Suspense
+            fallback={
+              <View style={styles.mapBoot}>
+                <ActivityIndicator color={BRAND_TEAL} size="large" />
+              </View>
+            }
+          >
+            <MapScreen
+              hideBottomNav
+              mapActive={showMap}
+              focusTarget={mapFocus}
+              onConsumedFocusTarget={() => setMapFocus(null)}
+              recenterNonce={mapRecenterNonce}
+              resetNonce={mapResetNonce}
+              schoolNav={mapSchoolNav}
+              onConsumedSchoolNav={() => setMapSchoolNav(null)}
+              firstMapOnboarding={firstMapOnboarding}
+              onConsumedFirstMapOnboarding={() => setFirstMapOnboarding(false)}
+              onMessageUser={(userId) => {
+                setDmUserId(userId);
+                setActiveTab('messages');
+              }}
+              onOpenProfile={(user) => {
+                void openProfileById(user.id);
+              }}
+              onCreateTrip={() => setShowCreateTrip(true)}
+              onOpenTrip={(tripId) => setAlbumTripId(tripId)}
+            />
+          </Suspense>
         </View>
         <View
           style={[styles.page, styles.frontPage, !showHome && styles.pageHidden]}
@@ -360,6 +458,7 @@ export function AppShell() {
       <ProfileModal
         visible={showProfile}
         user={profileUser}
+        overlayBottom={albumTripId ? 0 : navClearance}
         onClose={() => {
           setShowProfile(false);
           if (activeTab === 'profile') setActiveTab('map');
@@ -430,10 +529,15 @@ export function AppShell() {
         <View style={[styles.overlay, { bottom: overlayBottom }]}>
           <TripAlbumScreen
             tripId={albumTripId}
-            onClose={() => setAlbumTripId(null)}
+            inviteToken={albumInviteToken}
+            onClose={() => {
+              setAlbumTripId(null);
+              setAlbumInviteToken(null);
+            }}
             onOpenProfile={openProfileFromChat}
             onOpenTripChat={(channelId) => {
               setAlbumTripId(null);
+              setAlbumInviteToken(null);
               setFocusTripChannelId(channelId);
               setActiveTab('messages');
             }}
@@ -483,32 +587,7 @@ export function AppShell() {
         <View style={[styles.overlay, { bottom: navClearance }]}>
           <NotificationsScreen
             onClose={() => setShowNotifications(false)}
-            onNavigate={(nav) => {
-              setShowNotifications(false);
-              if (nav.type === 'profile') {
-                void openProfileById(nav.userId);
-              } else if (nav.type === 'album') {
-                setAlbumTripId(nav.tripId);
-              } else if (nav.type === 'trip') {
-                setAlbumTripId(nav.tripId);
-              } else if (nav.type === 'map') {
-                setActiveTab('map');
-              } else if (nav.type === 'post') {
-                setFocusPostId(nav.postId);
-                setActiveTab('home');
-              } else if (nav.type === 'dm') {
-                setDmUserId(nav.userId);
-                setDmThreadIdIntent(nav.threadId ?? null);
-                setActiveTab('messages');
-              } else if (nav.type === 'channel') {
-                setFocusSchoolChannel({
-                  channelId: nav.channelId,
-                  communityId: nav.communityId,
-                  slug: nav.slug,
-                });
-                setActiveTab('messages');
-              }
-            }}
+            onNavigate={handleNotificationNav}
           />
         </View>
       ) : null}
@@ -561,6 +640,12 @@ const styles = StyleSheet.create({
   page: { ...StyleSheet.absoluteFill },
   pageHidden: { opacity: 0 },
   frontPage: { zIndex: 2, backgroundColor: '#fff' },
+  mapBoot: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DDE5EA',
+  },
   overlay: {
     ...StyleSheet.absoluteFill,
     zIndex: 50,

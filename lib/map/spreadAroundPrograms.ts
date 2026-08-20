@@ -58,6 +58,8 @@ export function spreadPeopleAroundProgramPins(
   for (const program of programs) {
     const group = people.filter((person) => {
       if (claimed.has(person.id)) return false;
+      // Never relocate the signed-in user — keep live GPS accurate.
+      if (person.isCurrentUser) return false;
       if (person.locationPrivacy === 'hidden') return false;
       const d = haversineKm(
         person.latitude,

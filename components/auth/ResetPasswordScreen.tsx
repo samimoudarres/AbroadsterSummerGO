@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -49,6 +50,11 @@ export function ResetPasswordScreen({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <AuthStepHeader onBack={onBack} />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      >
       <View style={s.stepBody}>
         <Text style={s.title}>Choose a new password</Text>
         <Text style={s.subtitle}>
@@ -90,6 +96,7 @@ export function ResetPasswordScreen({
         />
         {error ? <Text style={s.error}>{error}</Text> : null}
       </View>
+      </ScrollView>
 
       <View style={s.footer}>
         <Pressable

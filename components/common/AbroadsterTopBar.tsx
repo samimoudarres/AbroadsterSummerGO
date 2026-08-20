@@ -11,9 +11,9 @@ export const ABROADSTER_HEADER_TEAL = BRAND_TEAL;
 /** White icon color used on the Figma teal header. */
 export const ABROADSTER_HEADER_ICON = colors.white;
 
-/** Figma logo frame size on 375pt artboard (node 156:202). */
-const LOGO_W = 162;
-const LOGO_H = 51;
+/** Figma logo frame — transparent PNG, slightly larger in the teal header row. */
+const LOGO_W = 190;
+const LOGO_H = 48;
 /** Figma content row under status (~88 − status). */
 const ROW_H = 56;
 

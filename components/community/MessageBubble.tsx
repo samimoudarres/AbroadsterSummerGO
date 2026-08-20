@@ -49,6 +49,7 @@ interface MessageBubbleProps {
   onVotePoll?: (pollId: string, optionId: string) => void;
   onViewPost?: (postId: string) => void;
   onOpenTaggedTrip?: (tripId: string) => void;
+  onAvatarPress?: (userId: string) => void;
 }
 
 export function MessageBubble({
@@ -71,6 +72,7 @@ export function MessageBubble({
   onVotePoll,
   onViewPost,
   onOpenTaggedTrip,
+  onAvatarPress,
 }: MessageBubbleProps) {
   const isMine = isOwnSender(message.senderId, meId);
   const isSystem = message.kind === 'system';
@@ -275,7 +277,17 @@ export function MessageBubble({
         {!isMine ? (
           <View style={styles.avatarSlot}>
             {showAvatar && sender ? (
-              <Avatar source={sender.avatar} size={33} />
+              <Pressable
+                onPress={() => onAvatarPress?.(sender.id)}
+                hitSlop={8}
+                disabled={!onAvatarPress}
+              >
+                <Avatar
+                  source={sender.avatar}
+                  name={sender.fullName}
+                  size={33}
+                />
+              </Pressable>
             ) : null}
           </View>
         ) : null}
@@ -341,15 +353,17 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   image: {
-    width: 204,
-    height: 58,
-    borderRadius: 10,
+    width: 220,
+    maxWidth: '100%',
+    aspectRatio: 1,
+    borderRadius: 14,
     marginBottom: 6,
+    backgroundColor: '#ddd',
   },
   foodPlaceholder: {
-    width: 204,
-    height: 58,
-    borderRadius: 10,
+    width: 220,
+    aspectRatio: 1,
+    borderRadius: 14,
     backgroundColor: '#ddd',
     alignItems: 'center',
     justifyContent: 'center',

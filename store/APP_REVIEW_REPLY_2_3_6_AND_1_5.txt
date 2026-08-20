@@ -1,0 +1,73 @@
+# App Store — reply for Aug 17 rejection (2.3.6 Age Rating + 1.5 Support URL)
+# Paste into: Reply to App Review
+
+================================================================================
+RESOLUTION CENTER REPLY
+================================================================================
+
+Thank you for the follow-up review. Please see responses to both items below. No new binary is required.
+
+1) Guideline 2.3.6 — In-App Controls / Age Assurance
+
+Abroadster does include an age assurance mechanism. It is an age declaration gate during account creation that blocks users under 13 from creating an account or accessing any social features. The reviewer likely signed in with the demo account we provided, which skips the sign-up flow, so the gate would not have been visible.
+
+How to locate it on the device:
+1. Launch Abroadster. If already signed in, go to Profile → Settings → Sign out.
+2. On the Welcome screen tap "Sign up".
+3. Enter first and last name → Next.
+4. Enter email or phone → Next.
+5. Create a password → Next.
+6. You will reach the "Birthday" step. Enter a date of birth that is under 13 years old and tap Next.
+7. The app blocks account creation and displays: "You must be at least 13 years old to use Abroadster."
+8. Only a date of birth of 13 years or older allows the user to continue to the rest of onboarding and the social features (map, feed, chat, trips).
+
+There is no way to reach any user-generated content, messaging, or map features without passing this age declaration gate. Our Terms of Use and Privacy Policy also state the 13+ requirement:
+https://abroadster.vercel.app/terms
+https://abroadster.vercel.app/privacy
+
+Because social media and user-generated content features are disabled for users under 13 through this gate, our Age Rating questionnaire answers are Yes for Social Media, Yes for User-Generated Content, and Yes for Age Assurance. This matches the app's actual behavior.
+
+Abroadster does not include Parental Controls. The In-App Controls selection reflects the age assurance gate described above.
+
+2) Guideline 1.5 — Support URL
+
+The previous Support URL pointed to an HTML file in Supabase Storage that was not served as a browsable support webpage. We have replaced it with a dedicated support page:
+
+https://abroadster.vercel.app/support
+
+This page loads correctly as a webpage and includes support guidance for app features, account deletion instructions, links to our Privacy Policy and Terms of Use, and a contact form that reaches our support inbox.
+
+Support contact: samimoudarres@hotmail.com
+
+We are happy to provide anything else needed to complete the review.
+
+================================================================================
+APP STORE CONNECT CLICK CHECKLIST (YOU)
+================================================================================
+
+A) Age Rating (Guideline 2.3.6)
+KEEP the answers consistent with the app — do NOT set Age Assurance to None.
+1. App Store Connect → Abroadster → App Information → Age Ratings → Edit
+2. Social Media: Yes
+3. User-Generated Content: Yes
+4. Age Assurance: Yes (age declaration / self-declared date of birth at sign-up)
+5. Parental Controls: No / not applicable
+6. Save. Calculated rating 13+ is correct.
+Then explain the location of the gate in the Resolution Center reply above.
+
+B) Support URL (Guideline 1.5)
+1. App Store Connect → Abroadster → App Information (and/or the version page) → Support URL
+2. Set to exactly: https://abroadster.vercel.app/support
+3. Open the URL in Safari to confirm it loads
+4. Save
+
+C) Review Notes — add the age gate instructions
+App Review Information → Notes: add this line so future reviewers can find it:
+"AGE ASSURANCE: Sign out, tap Sign up, and enter a date of birth under 13 at the Birthday step. The app blocks account creation with 'You must be at least 13 years old to use Abroadster.' Demo login skips sign-up, so use Sign up to see the gate."
+
+D) Resubmit
+1. Reply to App Review with the reply text above
+2. Version should show Ready for Review
+3. Click Resubmit to App Review
+
+NO NEW BUILD is required. Both items are App Store Connect metadata plus an explanation of an existing in-app feature.

@@ -24,6 +24,10 @@ export interface ChatProfile {
   /** Study-abroad / host map coordinates (shared with everyone). */
   hostLatitude?: number | null;
   hostLongitude?: number | null;
+  /** Last published When-In-Use GPS (optional; not the host city). */
+  liveLatitude?: number | null;
+  liveLongitude?: number | null;
+  liveLocationLabel?: string | null;
   citiesVisited?: number | null;
   countriesVisited?: number | null;
   /** Cached Explorer Score (miles traveled). */

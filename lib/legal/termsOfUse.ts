@@ -15,7 +15,7 @@ export const TERMS_OF_USE_SECTIONS: Array<{ heading: string; body: string }> = [
 
 By creating an account, tapping "I agree," or using the Service, you accept these Terms and our Privacy Policy. If you do not agree, do not use the Service.
 
-Contact: support@abroadster.com`,
+Contact: samimoudarres@hotmail.com`,
   },
   {
     heading: '2. Eligibility',
@@ -102,7 +102,7 @@ Some jurisdictions do not allow certain limitations; in those places, our liabil
   },
   {
     heading: '14. Termination',
-    body: `You may stop using the Service at any time and may request account deletion by contacting support@abroadster.com.
+    body: `You may stop using the Service at any time. Delete your account in the app under Profile → Settings → Delete account, or use https://abroadster.vercel.app/delete-account. You may also email samimoudarres@hotmail.com.
 
 We may suspend or terminate access if you violate these Terms, if required by law, or if we discontinue the Service. Sections that by nature should survive (including licenses already granted to content displayed to others, disclaimers, and limitations) will survive termination.`,
   },
@@ -117,7 +117,7 @@ We may suspend or terminate access if you violate these Terms, if required by la
   {
     heading: '17. Contact',
     body: `Questions about these Terms:
-Email: support@abroadster.com`,
+Email: samimoudarres@hotmail.com`,
   },
 ];
 

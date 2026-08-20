@@ -1,0 +1,93 @@
+# Abroadster — App Review reply (Guideline 2.1 Information Needed)
+# Paste into: Resolution Center reply + App Review Information → Notes
+# Replace DEMO_EMAIL / DEMO_PASSWORD and device list with your real values before sending.
+
+================================================================================
+READY-TO-PASTE REPLY (Resolution Center)
+================================================================================
+
+Thank you for reviewing Abroadster. Here is the information requested.
+
+1) SCREEN RECORDING
+A screen recording captured on a physical iPhone running the latest iOS is attached / linked in this reply. It starts from cold launch and shows:
+• Sign up / sign in
+• Completing profile onboarding
+• Map (location permission prompt — When In Use), searching a city, opening pins
+• Feed / posts (user-generated content)
+• Chat / messaging
+• Trip creation / album photo flow (camera or photo library prompt if shown)
+• Report and Block from a user profile
+• Settings → Delete account path (or confirmation that deletion is available; please use the demo account only if you need to verify — we can recreate it)
+
+2) DEVICES / OS TESTED BEFORE SUBMISSION
+• iPhone [MODEL], iOS [VERSION] — TestFlight / physical device
+• iPhone [MODEL], iOS [VERSION] — if applicable
+• Simulator checks during development: iPhone 16 / latest Xcode iOS simulator
+(Primary review build was smoke-tested on physical device via TestFlight.)
+
+3) APP FUNCTIONS, AUDIENCE, PROBLEM / VALUE
+Abroadster is a social app for university students studying abroad.
+Problem: students arrive abroad without an easy way to see classmates nearby, plan weekend trips, share albums, or stay in one program community.
+Value: a live social map of classmates and trips, plus feed, chat, trip albums, and program-scoped community features so students can meet people and coordinate travel in one place.
+Target audience: college / university students (13+) who are studying abroad or preparing to.
+
+4) SETUP / ACCESS INSTRUCTIONS + DEMO LOGIN
+Demo account (full access for review):
+Email: [DEMO_EMAIL]
+Password: [DEMO_PASSWORD]
+
+Or create a new account:
+1. Launch app → Sign up → Email
+2. Create password; complete short profile (birthday 13+)
+3. Optional: photo / notifications / location — may be declined
+4. Land on Map tab
+
+Main features to test:
+• Map — pan, search a city (e.g. Paris), open person / trip / program pins
+• Feed — view posts; create a post if desired
+• Chat — open Community / messages
+• Trips — view or create a trip; open album
+• Profile → Settings — Account deletion
+• Open another user’s profile → Report / Block
+
+Account deletion:
+Profile → Settings → Delete account
+Also: https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/delete-account.html
+
+5) EXTERNAL SERVICES / PLATFORMS
+• Supabase — auth, database, storage, realtime (core backend)
+• Expo / EAS — build and delivery
+• Apple Maps via react-native-maps — native iOS map
+• Mapbox — web map only (not required for iOS App Store review build’s native map)
+• Expo Notifications / APNs — optional push notifications
+• Resend (marketing site contact form only — not required inside the iOS app)
+No in-app purchases, subscriptions, or third-party payment processors.
+No AI content-generation services required for core functionality.
+No App Tracking Transparency / tracking SDKs.
+
+6) REGIONAL DIFFERENCES
+The app functions consistently across all regions. There are no region-locked features or region-specific content packs. Map pins and communities reflect user profiles / study cities globally.
+
+7) REGULATED INDUSTRY / PROTECTED MATERIAL
+Not applicable. Abroadster is a consumer social networking app for students. It does not operate in a highly regulated industry and does not redistribute protected third-party licensed media requiring special credentials.
+
+Support contact: samimoudarres@hotmail.com
+
+================================================================================
+SHORT NOTES BLOCK (also paste into App Review Information → Notes for future)
+================================================================================
+
+Abroadster — social map for students studying abroad (13+).
+
+DEMO LOGIN
+Email: [DEMO_EMAIL]
+Password: [DEMO_PASSWORD]
+
+HOW TO USE
+Sign in with the demo account (or Sign up with Email). Map → search cities / open pins. Feed, Chat, Trips/albums. Profile menus: Report + Block. Settings → Delete account.
+
+NO IAP / subscriptions. No ATT. Location When-In-Use only for map pin accuracy. Camera/Photos only when uploading media.
+
+Backend: Supabase. Maps: Apple Maps (iOS). Same features in all regions.
+
+Contact: samimoudarres@hotmail.com

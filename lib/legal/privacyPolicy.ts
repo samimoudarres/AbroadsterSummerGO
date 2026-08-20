@@ -9,7 +9,7 @@
 
 export const PRIVACY_POLICY_TITLE = 'Privacy Policy';
 
-export const PRIVACY_POLICY_EFFECTIVE = 'August 9, 2026';
+export const PRIVACY_POLICY_EFFECTIVE = 'August 11, 2026';
 
 export const PRIVACY_POLICY_SECTIONS: Array<{ heading: string; body: string }> = [
   {
@@ -17,8 +17,8 @@ export const PRIVACY_POLICY_SECTIONS: Array<{ heading: string; body: string }> =
     body: `Abroadster ("Abroadster," "we," "us," or "our") provides a mobile and web application that helps students connect around study-abroad communities, trips, messaging, maps, and photo sharing.
 
 Controller / operator: Abroadster
-Contact for privacy requests: support@abroadster.com
-If you have questions about this Policy, email support@abroadster.com.`,
+Contact for privacy requests: samimoudarres@hotmail.com
+If you have questions about this Policy, email samimoudarres@hotmail.com.`,
   },
   {
     heading: '2. Scope',
@@ -44,9 +44,10 @@ B. Information collected automatically
 • Push notification tokens: if you allow notifications, we may store a device token to deliver trip, friend, and activity alerts.
 
 C. Location information
-• Your map pin and “current location” on Abroadster are based on the host city / study-abroad program you set on your profile (for example “Florence, Italy”), not continuous live GPS tracking.
-• We store host city, host country, and optional map coordinates derived from that profile information so you and others can find each other on the map.
-• Abroadster does not require device location permission for the core map experience. If a future update requests location permission, we will ask only with your consent and explain the purpose in the system prompt.
+• Study-abroad host city and country come from the schools and city you enter on your profile. That is where you “study,” not necessarily where you are standing.
+• If you allow When-In-Use location while using the map, we read your device GPS only while the app is open, reverse-geocode it to a city/country label, and show that as your current location on the map and in the nearby list so friends can see where you actually are.
+• We store last published live coordinates and city label separately from your host city. We do not request Always / background location.
+• You can decline the location prompt; the map still works using your host city / program pin.
 
 D. Photos and camera
 • If you grant photo library or camera permission, we access media only when you choose to upload a profile photo, post, chat image, or trip album photo.
@@ -85,7 +86,7 @@ We do not share your phone number or email with other users by default as a publ
 
 We may retain limited information after account deletion where required for security, fraud prevention, dispute resolution, or legal compliance (for example logs needed to investigate abuse).
 
-You may delete your account at any time in the app: Profile → menu → Settings → Delete account. You may also request deletion by emailing support@abroadster.com or by using our public account-deletion instructions page (linked from our Privacy Policy hosting). We will process verified requests within a reasonable period, subject to technical and legal limits.`,
+You may delete your account at any time in the app: Profile → menu → Settings → Delete account. You may also request deletion by emailing samimoudarres@hotmail.com or by using our public account-deletion instructions at https://abroadster.vercel.app/delete-account. We will process verified requests within a reasonable period, subject to technical and legal limits.`,
   },
   {
     heading: '7. Safety, reporting, and blocking',
@@ -105,7 +106,7 @@ No method of transmission or storage is 100% secure. You are responsible for kee
   },
   {
     heading: '9. Children',
-    body: `Abroadster is intended for users age 13 and older. We do not knowingly collect personal information from children under 13. If we learn we have collected such information, we will delete it. If you believe a child under 13 has created an account, contact support@abroadster.com.`,
+    body: `Abroadster is intended for users age 13 and older. We do not knowingly collect personal information from children under 13. If we learn we have collected such information, we will delete it. If you believe a child under 13 has created an account, contact samimoudarres@hotmail.com.`,
   },
   {
     heading: '10. Your choices and rights',
@@ -115,7 +116,7 @@ You can:
 • Edit profile information in the app.
 • Manage camera, photos, and notification permissions in device settings.
 • Block or report other users from their profile menu.
-• Delete your account in Settings, or email support@abroadster.com.
+• Delete your account in Settings, or email samimoudarres@hotmail.com.
 
 We will not discriminate against you for exercising privacy rights. We may need to verify your identity before fulfilling a request.`,
   },
@@ -134,9 +135,9 @@ We will not discriminate against you for exercising privacy rights. We may need 
   {
     heading: '14. Contact',
     body: `Privacy questions or requests:
-Email: support@abroadster.com
+Email: samimoudarres@hotmail.com
 
-Account deletion instructions (web): see delete-account.html on our legal hosting, or Profile → Settings → Delete account in the app.
+Account deletion instructions (web): https://abroadster.vercel.app/delete-account, or Profile → Settings → Delete account in the app.
 
 For App Store / Google Play reviewers: this Privacy Policy is available in-app during account creation and at the Privacy Policy URL listed on the store listing.`,
   },

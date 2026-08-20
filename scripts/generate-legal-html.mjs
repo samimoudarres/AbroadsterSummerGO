@@ -31,7 +31,7 @@ h2{font-size:1.05rem;margin-top:1.4rem}p{white-space:pre-wrap;margin:.4rem 0 0}a
 </head>
 <body>
 <h1>${esc(title)}</h1>
-<p class="meta">Effective / Last updated: ${esc(effective)} · <a href="${otherHref}">${otherLabel}</a> · <a href="mailto:support@abroadster.com">support@abroadster.com</a></p>
+<p class="meta">Effective / Last updated: ${esc(effective)} · <a href="${otherHref}">${otherLabel}</a> · <a href="mailto:samimoudarres@hotmail.com">samimoudarres@hotmail.com</a></p>
 ${body}
 </body>
 </html>
@@ -61,7 +61,7 @@ writeFileSync(
 );
 writeFileSync(
   'public/legal/index.html',
-  `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Abroadster Legal</title></head><body style="font-family:system-ui;padding:40px;max-width:640px;margin:0 auto"><h1>Abroadster Legal</h1><ul><li><a href="./privacy.html">Privacy Policy</a></li><li><a href="./terms.html">Terms of Use</a></li><li><a href="./delete-account.html">Delete your account</a></li></ul><p><a href="mailto:support@abroadster.com">support@abroadster.com</a></p></body></html>`,
+  `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Abroadster Legal</title></head><body style="font-family:system-ui;padding:40px;max-width:640px;margin:0 auto"><h1>Abroadster Legal</h1><ul><li><a href="./privacy.html">Privacy Policy</a></li><li><a href="./terms.html">Terms of Use</a></li><li><a href="./delete-account.html">Delete your account</a></li></ul><p><a href="mailto:samimoudarres@hotmail.com">samimoudarres@hotmail.com</a></p></body></html>`,
 );
 
 writeFileSync(
@@ -88,7 +88,7 @@ a{color:#175864}ol,ul{padding-left:1.2rem}
 <p class="lead">This page is for users of the <strong>Abroadster</strong> mobile app. It explains how to request that your account and associated data be deleted, what is deleted, and what may be retained.</p>
 <div class="box">
 <strong>App / developer name:</strong> Abroadster<br/>
-<strong>Support:</strong> <a href="mailto:support@abroadster.com">support@abroadster.com</a>
+<strong>Support:</strong> <a href="mailto:samimoudarres@hotmail.com">samimoudarres@hotmail.com</a>
 </div>
 <h2>How to request account deletion (in the app)</h2>
 <ol>
@@ -100,7 +100,7 @@ a{color:#175864}ol,ul{padding-left:1.2rem}
 <p>Deletion begins immediately after you confirm in the app.</p>
 <h2>How to request account deletion by email</h2>
 <ol>
-<li>Email <a href="mailto:support@abroadster.com">support@abroadster.com</a> from the email address on your Abroadster account.</li>
+<li>Email <a href="mailto:samimoudarres@hotmail.com">samimoudarres@hotmail.com</a> from the email address on your Abroadster account.</li>
 <li>Use the subject line: <strong>Delete my Abroadster account</strong>.</li>
 <li>Include the name and email associated with the account.</li>
 </ol>

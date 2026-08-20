@@ -1,0 +1,68 @@
+.footer {
+  background: var(--teal);
+  color: var(--cream);
+}
+
+.inner {
+  display: grid;
+  gap: 1.5rem;
+  padding: 2rem 0 1.5rem;
+}
+
+@media (min-width: 860px) {
+  .inner {
+    grid-template-columns: 1.1fr 1.8fr;
+  }
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.logo {
+  height: 52px;
+  width: auto;
+}
+
+.cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.cols h3 {
+  margin: 0 0 0.55rem;
+  font-family: inherit;
+  font-size: 1.2rem;
+  color: var(--cream);
+}
+
+.cols a {
+  display: block;
+  margin: 0 0 0.4rem;
+  color: rgba(243, 221, 197, 0.88);
+  font-family: inherit;
+  font-size: 1.15rem;
+}
+
+.cols a:hover {
+  color: var(--white);
+  text-decoration: underline;
+}
+
+.copy {
+  border-top: 1px solid rgba(243, 221, 197, 0.15);
+  padding: 0.85rem 0 1.1rem;
+  font-family: inherit;
+  font-size: 1.05rem;
+  color: rgba(243, 221, 197, 0.7);
+}
+
+@media (max-width: 640px) {
+  .cols {
+    grid-template-columns: 1fr;
+  }
+}

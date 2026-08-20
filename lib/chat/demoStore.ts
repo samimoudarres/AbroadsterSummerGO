@@ -2901,8 +2901,8 @@ export const demoChat = {
     }
     const trip = state().trips.find((t) => t.id === req.tripId);
     if (!trip) throw new Error('Trip not found');
-    if (trip.ownerId !== DEMO_ME_ID) {
-      throw new Error('Only the host can respond');
+    if (trip.ownerId !== DEMO_ME_ID && !trip.memberIds.includes(DEMO_ME_ID)) {
+      throw new Error('Only trip members can respond');
     }
     const me = state().profiles.find((p) => p.id === DEMO_ME_ID)!;
 
@@ -3161,6 +3161,21 @@ export const demoChat = {
 
   tripInviteLink(trip: ChatTrip): string {
     return `abroadster://trip/${trip.inviteToken ?? trip.id}`;
+  },
+
+  async joinTripViaInviteToken(token: string): Promise<ChatTrip | null> {
+    await loadDemoState();
+    const trimmed = token.trim();
+    if (!trimmed || trimmed === 'preview') return null;
+    const trip = state().trips.find((x) => x.inviteToken === trimmed || x.id === trimmed);
+    if (!trip) return null;
+    if (!trip.memberIds.includes(DEMO_ME_ID)) {
+      trip.memberIds.push(DEMO_ME_ID);
+    }
+    trip.myJoinStatus = 'accepted';
+    await persist();
+    emit();
+    return enrichTripAlbum(trip);
   },
 
   async isFriend(userId: string): Promise<boolean> {

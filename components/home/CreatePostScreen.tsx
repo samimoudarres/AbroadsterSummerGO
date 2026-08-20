@@ -572,40 +572,45 @@ export function CreatePostScreen({
             ) : (
               <View style={styles.carouselPreview}>
                 {selectedPhotos.length ? (
-                  <ScrollView
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    style={{ maxHeight: 260 }}
-                  >
-                    {selectedPhotos.map((uri, i) => {
-                      const aspect = getImageAspectSync(uri);
-                      const w = Math.min(previewW, SCREEN_W - 32);
-                      const h = Math.min(260, w / aspect);
-                      return (
-                        <View
-                          key={`cprev-${i}`}
-                          style={[
-                            styles.carouselSlide,
-                            { width: w, height: h },
-                          ]}
-                        >
-                          <Image
-                            source={feedImageSource(uri as any)}
-                            style={{ width: w, height: h }}
-                            resizeMode="contain"
-                          />
-                          {selectedPhotos.length > 1 ? (
-                            <View style={styles.countPill}>
-                              <Text style={styles.countText}>
-                                {i + 1}/{selectedPhotos.length}
-                              </Text>
-                            </View>
-                          ) : null}
-                        </View>
-                      );
-                    })}
-                  </ScrollView>
+                  (() => {
+                    const frameAspect = Math.max(
+                      0.75,
+                      Math.min(1.35, getImageAspectSync(selectedPhotos[0])),
+                    );
+                    const w = Math.min(previewW, SCREEN_W - 32);
+                    const h = Math.min(320, w / frameAspect);
+                    return (
+                      <ScrollView
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        style={{ height: h }}
+                      >
+                        {selectedPhotos.map((uri, i) => (
+                          <View
+                            key={`cprev-${i}`}
+                            style={[
+                              styles.carouselSlide,
+                              { width: w, height: h },
+                            ]}
+                          >
+                            <Image
+                              source={feedImageSource(uri as any)}
+                              style={{ width: w, height: h }}
+                              resizeMode="cover"
+                            />
+                            {selectedPhotos.length > 1 ? (
+                              <View style={styles.countPill}>
+                                <Text style={styles.countText}>
+                                  {i + 1}/{selectedPhotos.length}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        ))}
+                      </ScrollView>
+                    );
+                  })()
                 ) : (
                   <View style={[styles.carouselHero, styles.carouselEmpty]}>
                     <Ionicons
@@ -709,31 +714,41 @@ export function CreatePostScreen({
                 showPlaceholders={false}
               />
             ) : (
-              <ScrollView horizontal pagingEnabled>
-                {selectedPhotos.map((uri, i) => {
-                  const aspect = getImageAspectSync(uri);
-                  const w = previewW;
-                  const h = Math.min(360, w / aspect);
-                  return (
-                    <View
-                      key={`d-${i}`}
-                      style={{
-                        width: w,
-                        height: h,
-                        overflow: 'hidden',
-                        backgroundColor: '#111',
-                      }}
-                    >
-                      <CarouselCroppedImage
-                        uri={uri}
-                        crop={crops[i] ?? DEFAULT_CROP}
-                        width={w}
-                        height={h}
-                      />
-                    </View>
-                  );
-                })}
-              </ScrollView>
+              (() => {
+                const frameAspect = Math.max(
+                  0.75,
+                  Math.min(
+                    1.35,
+                    selectedPhotos[0]
+                      ? getImageAspectSync(selectedPhotos[0])
+                      : 1,
+                  ),
+                );
+                const w = previewW;
+                const h = Math.min(360, w / frameAspect);
+                return (
+                  <ScrollView horizontal pagingEnabled style={{ height: h }}>
+                    {selectedPhotos.map((uri, i) => (
+                      <View
+                        key={`d-${i}`}
+                        style={{
+                          width: w,
+                          height: h,
+                          overflow: 'hidden',
+                          backgroundColor: '#111',
+                        }}
+                      >
+                        <CarouselCroppedImage
+                          uri={uri}
+                          crop={crops[i] ?? DEFAULT_CROP}
+                          width={w}
+                          height={h}
+                        />
+                      </View>
+                    ))}
+                  </ScrollView>
+                );
+              })()
             )}
           </View>
 

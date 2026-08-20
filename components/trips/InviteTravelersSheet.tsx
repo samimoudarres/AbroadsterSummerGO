@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -13,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../../constants/theme';
 import type { ChatProfile } from '../../data/chatTypes';
 import { chatRepo } from '../../lib/chat/repository';
+import { copyText } from '../../lib/clipboard';
 import { usePhoneTopPad } from '../../lib/layout/safeArea';
 import { Avatar } from '../common/Avatar';
 
@@ -20,6 +22,8 @@ interface InviteTravelersSheetProps {
   visible: boolean;
   /** Already on the trip — cannot invite again */
   excludeIds: string[];
+  /** Real trip invite URL (never preview). */
+  inviteLink?: string | null;
   onClose: () => void;
   onConfirm: (userIds: string[]) => Promise<void>;
 }
@@ -31,6 +35,7 @@ interface InviteTravelersSheetProps {
 export function InviteTravelersSheet({
   visible,
   excludeIds,
+  inviteLink,
   onClose,
   onConfirm,
 }: InviteTravelersSheetProps) {
@@ -90,6 +95,18 @@ export function InviteTravelersSheet({
     }
   };
 
+  const copyInvite = async () => {
+    if (!inviteLink) return;
+    // Prefer a full share message when we can resolve the trip from the link token
+    const ok = await copyText(inviteLink);
+    Alert.alert(
+      ok ? 'Link copied' : 'Invite link',
+      ok
+        ? 'Anyone with this link can open the invite in Abroadster (or download the app).'
+        : inviteLink,
+    );
+  };
+
   return (
     <Modal
       visible={visible}
@@ -105,6 +122,16 @@ export function InviteTravelersSheet({
           <Text style={styles.title}>Invite travelers</Text>
           <View style={styles.side} />
         </View>
+
+        {inviteLink ? (
+          <Pressable
+            style={styles.copyLinkRow}
+            onPress={() => void copyInvite()}
+          >
+            <Ionicons name="link" size={18} color={colors.openJoin} />
+            <Text style={styles.copyLinkText}>Copy invite link</Text>
+          </Pressable>
+        ) : null}
 
         <View style={styles.searchRow}>
           <Ionicons name="search" size={18} color={colors.textMuted} />
@@ -203,6 +230,22 @@ const styles = StyleSheet.create({
     fontFamily: fonts.extraBold,
     fontSize: 17,
     color: colors.black,
+  },
+  copyLinkRow: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(52, 199, 89, 0.12)',
+  },
+  copyLinkText: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.openJoin,
   },
   searchRow: {
     marginHorizontal: 16,

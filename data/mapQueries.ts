@@ -118,11 +118,65 @@ function matchesSearch(user: UserProfile, q: string): boolean {
   );
 }
 
-function personDetailLabel(user: UserProfile, cityName: string): string {
-  if (user.hostCity && user.hostCity !== cityName) {
-    return `Returning to ${user.hostCity} on Sunday`;
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function parseTripDay(iso?: string): Date | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return startOfDay(d);
+}
+
+function weekdayName(d: Date): string {
+  return d.toLocaleDateString('en-US', { weekday: 'long' });
+}
+
+function programCityOf(user: UserProfile): string {
+  return user.hostCity || user.studyAbroadProgram || 'abroad';
+}
+
+/** Grey status under a person in the map drawer — driven by real trip dates. */
+function personDetailLabel(user: UserProfile, trips: TripPin[]): string {
+  const programCity = programCityOf(user);
+  const today = startOfDay(new Date());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const mine = trips.filter(
+    (t) =>
+      t.memberIds.includes(user.id) ||
+      t.members.some((m) => m.userId === user.id),
+  );
+
+  for (const trip of mine) {
+    const start = parseTripDay(trip.dateStart);
+    const end = parseTripDay(trip.dateEnd);
+    if (start && end && today >= start && today <= end) {
+      return `Returning to ${programCity} on ${weekdayName(end)}`;
+    }
   }
-  return `Studying in ${user.hostCity}`;
+
+  for (const trip of mine) {
+    const start = parseTripDay(trip.dateStart);
+    if (start && start.getTime() === tomorrow.getTime()) {
+      const dest = trip.destinationCity || 'trip';
+      return `Leaving for ${dest} Tomorrow`;
+    }
+  }
+
+  return `Studying in ${programCity}`;
+}
+
+function personStatusLabel(user: UserProfile): string {
+  const label = (user.locationLabel || '').trim();
+  if (label) {
+    return label.toLowerCase().startsWith('in ') ? label : `In ${label}`;
+  }
+  const city = user.hostCity || 'abroad';
+  const country = user.hostCountry;
+  return country ? `In ${city}, ${country}` : `In ${city}`;
 }
 
 function tripTitle(trip: TripPin): string {
@@ -320,16 +374,13 @@ export function computeVisibleMapData(options: {
   // People: everyone matching filters; sorted in-view first below
   if (layerFilter === 'all' || layerFilter === 'here') {
     for (const u of filteredPeople) {
-      const here = inView(u.latitude, u.longitude);
       personItems.push({
         kind: 'person',
         id: u.id,
         user: u,
         status: 'here',
-        statusLabel: here
-          ? `In ${cityName}, ${countryName}`
-          : u.locationLabel || `In ${u.hostCity || 'abroad'}`,
-        detailLabel: personDetailLabel(u, cityName),
+        statusLabel: personStatusLabel(u),
+        detailLabel: personDetailLabel(u, tripPool),
         newPosts: u.newPosts,
       });
     }

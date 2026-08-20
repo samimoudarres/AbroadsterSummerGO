@@ -9,8 +9,8 @@ export const MAPBOX_TOKEN =
 
 export const hasMapboxToken = MAPBOX_TOKEN.length > 0;
 
-/** Light, low-clutter default style. */
-export const MAPBOX_STYLE_REGULAR = 'mapbox://styles/mapbox/light-v11';
+/** Colorful default: green land / blue water (not grayscale light). */
+export const MAPBOX_STYLE_REGULAR = 'mapbox://styles/mapbox/outdoors-v12';
 export const MAPBOX_STYLE_SATELLITE = 'mapbox://styles/mapbox/satellite-streets-v12';
 
 /** Fallback if Mapbox is unavailable. */

@@ -75,6 +75,24 @@ export function FeedPostCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const lastTap = useRef(0);
   const photos = post.photoUrls?.length ? post.photoUrls : [];
+
+  const reportPost = async (reason: string) => {
+    try {
+      const { chatRepo } = await import('../../lib/chat/repository');
+      await chatRepo.reportContent({
+        targetType: 'post',
+        targetId: post.id,
+        reportedUserId: post.authorId,
+        reason,
+      });
+      Alert.alert(
+        'Report submitted',
+        'Thanks. Our team will review this. Contact samimoudarres@hotmail.com if you need more help.',
+      );
+    } catch (e: any) {
+      Alert.alert('Could not report', e?.message || 'Try again.');
+    }
+  };
   const isCollage =
     post.displayMode === 'collage' && Boolean(post.collageLayoutId);
   const collageLayout = isCollage
@@ -213,20 +231,18 @@ export function FeedPostCard({
             </Text>
             <LocationPinIcon size={16} />
           </Pressable>
-          {isOwnPost ? (
-            <Pressable
-              onPress={() => setMenuOpen(true)}
-              hitSlop={10}
-              style={styles.moreBtn}
-              accessibilityLabel="Post options"
-            >
-              <Ionicons
-                name="ellipsis-horizontal"
-                size={20}
-                color={colors.black}
-              />
-            </Pressable>
-          ) : null}
+          <Pressable
+            onPress={() => setMenuOpen(true)}
+            hitSlop={10}
+            style={styles.moreBtn}
+            accessibilityLabel="Post options"
+          >
+            <Ionicons
+              name="ellipsis-horizontal"
+              size={20}
+              color={colors.black}
+            />
+          </Pressable>
         </View>
       </View>
 
@@ -241,39 +257,75 @@ export function FeedPostCard({
           onPress={() => setMenuOpen(false)}
         >
           <View style={styles.menuSheet}>
-            <Pressable
-              style={styles.menuRow}
-              onPress={() => {
-                setMenuOpen(false);
-                onEditPost?.(post);
-              }}
-            >
-              <Ionicons name="create-outline" size={20} color={colors.black} />
-              <Text style={styles.menuText}>Edit post</Text>
-            </Pressable>
-            <Pressable
-              style={styles.menuRow}
-              onPress={() => {
-                setMenuOpen(false);
-                Alert.alert(
-                  'Delete post?',
-                  'This removes the post for everyone. This can’t be undone.',
-                  [
+            {isOwnPost ? (
+              <>
+                <Pressable
+                  style={styles.menuRow}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    onEditPost?.(post);
+                  }}
+                >
+                  <Ionicons name="create-outline" size={20} color={colors.black} />
+                  <Text style={styles.menuText}>Edit post</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.menuRow}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    Alert.alert(
+                      'Delete post?',
+                      'This removes the post for everyone. This can’t be undone.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete',
+                          style: 'destructive',
+                          onPress: () => onDeletePost?.(post),
+                        },
+                      ],
+                    );
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#C0392B" />
+                  <Text style={[styles.menuText, styles.menuDanger]}>
+                    Delete post
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <Pressable
+                style={styles.menuRow}
+                onPress={() => {
+                  setMenuOpen(false);
+                  Alert.alert('Report post', 'Why are you reporting this post?', [
                     { text: 'Cancel', style: 'cancel' },
                     {
-                      text: 'Delete',
-                      style: 'destructive',
-                      onPress: () => onDeletePost?.(post),
+                      text: 'Harassment',
+                      onPress: () => void reportPost('Harassment or bullying'),
                     },
-                  ],
-                );
-              }}
-            >
-              <Ionicons name="trash-outline" size={20} color="#C0392B" />
-              <Text style={[styles.menuText, styles.menuDanger]}>
-                Delete post
-              </Text>
-            </Pressable>
+                    {
+                      text: 'Inappropriate',
+                      onPress: () =>
+                        void reportPost('Sexual or inappropriate content'),
+                    },
+                    {
+                      text: 'Spam',
+                      onPress: () => void reportPost('Spam or scams'),
+                    },
+                    {
+                      text: 'Other',
+                      onPress: () => void reportPost('Other'),
+                    },
+                  ]);
+                }}
+              >
+                <Ionicons name="flag-outline" size={20} color="#C0392B" />
+                <Text style={[styles.menuText, styles.menuDanger]}>
+                  Report post
+                </Text>
+              </Pressable>
+            )}
             <Pressable
               style={[styles.menuRow, styles.menuCancel]}
               onPress={() => setMenuOpen(false)}

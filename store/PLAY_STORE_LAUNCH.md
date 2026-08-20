@@ -22,7 +22,7 @@ Use this checklist. Most backend/app work is already done. Complete the **YOU** 
 | Privacy Policy | https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/privacy.html |
 | Terms | https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/terms.html |
 | Account deletion | https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/delete-account.html |
-| Support email | support@abroadster.com |
+| Support email | samimoudarres@hotmail.com |
 
 ---
 
@@ -63,7 +63,7 @@ Find classmates and friends nearby, plan trips together, share albums from every
 
 Abroadster is made for university students living and traveling abroad.
 
-Support: support@abroadster.com
+Support: samimoudarres@hotmail.com
 Privacy: https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal/privacy.html
 ```
 
@@ -78,7 +78,7 @@ Privacy: https://ajwnvwvpvasxkwpfdsvo.supabase.co/storage/v1/object/public/legal
    - Upload in Play Console under Phone screenshots.
 
 ### Contact details
-- **Email:** support@abroadster.com  
+- **Email:** samimoudarres@hotmail.com  
 - **Privacy policy:** paste the Privacy Policy URL above.
 
 Save the listing.
@@ -148,7 +148,7 @@ Complete every item under **Policy → App content** (left sidebar). Answer care
 - Yes, users can create content.  
 - Users can **report** and **block**.  
 - You review reports via Supabase table `content_reports` (status `open`).  
-- Email for safety: support@abroadster.com  
+- Email for safety: samimoudarres@hotmail.com  
 
 ### 13) Families / Children
 - Not in Designed for Families unless you intend to; leave as **not primarily for children**.
@@ -229,7 +229,7 @@ Review often takes **a few days to ~2 weeks**.
 
 - Check email for Play policy questions.  
 - Review open rows in Supabase `content_reports`.  
-- Reply from support@abroadster.com if Google asks for more info.
+- Reply from samimoudarres@hotmail.com if Google asks for more info.
 
 ---
 

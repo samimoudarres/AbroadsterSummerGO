@@ -1,168 +1,75 @@
 import * as Linking from 'expo-linking';
 import { hasSupabase, supabase } from '../supabase';
-import {
-  contactToAuthEmail,
-  isValidEmail,
-  isValidPassword,
-  isValidPhone,
-  normalizePhone,
-} from './validation';
-import {
-  loadLocalAccounts,
-  saveLocalAccounts,
-  setPasswordRecoveryPending,
-} from './authStorage';
-
-export type PasswordResetMethod = 'email_link' | 'identity';
-
-function looksLikePhone(identifier: string): boolean {
-  const raw = identifier.trim();
-  return !raw.includes('@') && isValidPhone(raw);
-}
-
-function toAuthEmail(identifier: string): string {
-  const raw = identifier.trim();
-  if (looksLikePhone(raw)) {
-    return contactToAuthEmail('phone', raw);
-  }
-  return raw.toLowerCase();
-}
-
-function dobKey(d: Date | string): string {
-  if (typeof d === 'string') return d.slice(0, 10);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+import { isValidEmail, isValidPassword, isValidPhone } from './validation';
+import { setPasswordRecoveryPending } from './authStorage';
+import { LEGAL_URLS } from '../legal/urls';
 
 /** Deep-link / web URL Supabase should open after the reset email. */
 export function passwordResetRedirectTo(): string {
   return Linking.createURL('auth/reset-password');
 }
 
-/**
- * Start reset for an email account (sends Supabase recovery email).
- * Phone accounts should use resetPasswordWithIdentity instead.
- */
-export async function sendPasswordResetEmail(
-  identifier: string,
-): Promise<void> {
+function looksLikePhone(identifier: string): boolean {
   const raw = identifier.trim();
-  if (!raw) throw new Error('Enter the email on your account.');
-  if (looksLikePhone(raw)) {
-    throw new Error(
-      'Phone accounts reset with your birthday. Continue to verify it’s you.',
-    );
-  }
-  if (!isValidEmail(raw)) {
-    throw new Error('Enter a valid email address.');
-  }
-
-  if (!(hasSupabase && supabase)) {
-    // Local/demo: no inbox — caller should use identity reset
-    throw new Error('LOCAL_IDENTITY_RESET');
-  }
-
-  const { error } = await supabase.auth.resetPasswordForEmail(raw.toLowerCase(), {
-    redirectTo: passwordResetRedirectTo(),
-  });
-  if (error) {
-    const msg = String(error.message || '').toLowerCase();
-    if (msg.includes('rate limit')) {
-      throw new Error(
-        'Too many reset emails sent. Wait a minute, then try again.',
-      );
-    }
-    // Still show success-style copy to the UI for enumeration safety —
-    // but surface real config errors
-    if (msg.includes('redirect') || msg.includes('url')) {
-      throw new Error(
-        'Password reset is misconfigured (redirect URL). Add abroadster://auth/reset-password in Supabase Auth URL settings.',
-      );
-    }
-    throw new Error(error.message || 'Could not send reset email.');
-  }
+  return !raw.includes('@') && isValidPhone(raw);
 }
 
 /**
- * Verify phone/email + birthday, then set a new password.
- * Works for every account type (email, student, phone) and local demo accounts.
+ * Request a password reset link for phone or email.
+ * Phone numbers receive the link at the recovery email on their profile.
  */
-export async function resetPasswordWithIdentity(input: {
-  identifier: string;
-  birthday: Date;
-  newPassword: string;
-  confirmPassword: string;
-}): Promise<void> {
-  const identifier = input.identifier.trim();
-  if (!identifier) {
+export async function requestPasswordReset(identifier: string): Promise<void> {
+  const raw = identifier.trim();
+  if (!raw) {
     throw new Error('Enter the phone or email on your account.');
   }
-  if (!isValidPassword(input.newPassword)) {
-    throw new Error('Password must be at least 6 characters.');
-  }
-  if (input.newPassword !== input.confirmPassword) {
-    throw new Error('New passwords do not match.');
+  if (!looksLikePhone(raw) && !isValidEmail(raw)) {
+    throw new Error('Enter a valid phone number or email.');
   }
 
-  const dateOfBirth = dobKey(input.birthday);
+  if (!(hasSupabase && supabase)) {
+    throw new Error('Password reset requires an internet connection.');
+  }
 
-  if (hasSupabase && supabase) {
-    const { data, error } = await supabase.functions.invoke('reset-password', {
+  const { data, error } = await supabase.functions.invoke(
+    'request-password-reset',
+    {
       body: {
-        identifier,
-        dateOfBirth,
-        newPassword: input.newPassword,
+        identifier: raw,
+        redirectTo: passwordResetRedirectTo(),
       },
-    });
-
-    if (error) {
-      let detail = '';
-      try {
-        const ctx = (error as { context?: { json?: () => Promise<unknown> } })
-          .context;
-        const body = ctx?.json ? await ctx.json() : data;
-        detail = String((body as { error?: string })?.error || '').trim();
-      } catch {
-        // ignore
-      }
-      throw new Error(
-        detail || error.message || 'Could not reset password. Try again.',
-      );
-    }
-
-    const body = data as { ok?: boolean; error?: string } | null;
-    if (body?.error) throw new Error(body.error);
-    if (!body?.ok) {
-      throw new Error(
-        'Could not verify that account. Check your phone/email and birthday.',
-      );
-    }
-    return;
-  }
-
-  // Offline / local demo accounts
-  const accounts = await loadLocalAccounts();
-  const authEmail = toAuthEmail(identifier);
-  const phone = looksLikePhone(identifier)
-    ? normalizePhone(identifier)
-    : null;
-  const account = accounts.find(
-    (a) =>
-      a.authEmail === authEmail ||
-      a.identifier.toLowerCase() === identifier.toLowerCase() ||
-      (phone && a.phoneNumber === phone) ||
-      (a.loginEmail && a.loginEmail === identifier.toLowerCase()) ||
-      (a.studentEmail && a.studentEmail === identifier.toLowerCase()),
+    },
   );
-  if (!account || account.dateOfBirth.slice(0, 10) !== dateOfBirth) {
+
+  if (error) {
+    let detail = '';
+    try {
+      const ctx = (error as { context?: { json?: () => Promise<unknown> } })
+        .context;
+      const body = ctx?.json ? await ctx.json() : data;
+      detail = String((body as { error?: string })?.error || '').trim();
+    } catch {
+      // ignore
+    }
     throw new Error(
-      'Could not verify that account. Check your phone/email and birthday.',
+      detail || error.message || 'Could not send reset email. Try again.',
     );
   }
-  account.password = input.newPassword;
-  await saveLocalAccounts(accounts);
+
+  const body = data as { ok?: boolean; error?: string; code?: string } | null;
+  if (body?.code === 'NO_RECOVERY_EMAIL') {
+    throw new Error(
+      `No email on file. Contact ${LEGAL_URLS.supportEmail} for help.`,
+    );
+  }
+  if (body?.error) throw new Error(body.error);
+}
+
+/** @deprecated Birthday reset removed — kept for legacy edge function only. */
+export async function sendPasswordResetEmail(
+  identifier: string,
+): Promise<void> {
+  await requestPasswordReset(identifier);
 }
 
 /**
@@ -196,7 +103,6 @@ export async function completePasswordRecovery(
     throw new Error(error.message || 'Could not update password.');
   }
 
-  // Force a clean login with the new password
   try {
     await supabase.auth.signOut({ scope: 'local' });
   } catch {
@@ -219,7 +125,6 @@ export async function consumePasswordRecoveryUrl(url: string): Promise<boolean> 
       path.includes('reset-password') ||
       url.includes('auth/reset-password');
 
-    // PKCE: ?code=
     const code =
       (parsed.queryParams?.code as string | undefined) ||
       new URL(url.replace('#', '?'), 'http://localhost').searchParams.get('code');
@@ -230,7 +135,6 @@ export async function consumePasswordRecoveryUrl(url: string): Promise<boolean> 
       return true;
     }
 
-    // Implicit: #access_token=&refresh_token=&type=recovery
     const hash = url.includes('#') ? url.slice(url.indexOf('#') + 1) : '';
     const params = new URLSearchParams(hash);
     const access_token = params.get('access_token');
@@ -252,8 +156,4 @@ export async function consumePasswordRecoveryUrl(url: string): Promise<boolean> 
     return false;
   }
   return false;
-}
-
-export function detectResetMethod(identifier: string): PasswordResetMethod {
-  return looksLikePhone(identifier.trim()) ? 'identity' : 'email_link';
 }

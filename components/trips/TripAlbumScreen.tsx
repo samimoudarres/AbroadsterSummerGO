@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,16 +10,25 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Asset, requestPermissionsAsync } from 'expo-media-library';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '../../constants/theme';
 import type { AlbumPhoto, ChatProfile, ChatTrip } from '../../data/chatTypes';
 import { chatRepo, initChat, isOwnSender, isTripParticipant, subscribeChat } from '../../lib/chat/repository';
+import { copyText } from '../../lib/clipboard';
 import { demoChat } from '../../lib/chat/demoStore';
 import { confirmChoice } from '../../lib/confirm';
 import { pickExtraFromLibrary } from '../../lib/feed/galleryAssets';
+import { useEdgeSwipeBack } from '../../lib/gestures/useEdgeSwipeBack';
 import { shortCalendarRange } from '../../lib/trips/dates';
+import { buildTripInviteShareMessage } from '../../lib/trips/inviteLinks';
 import {
   canRequestTripJoin,
   getTripDisplayStatus,
@@ -39,22 +48,12 @@ const GAP = 1.5;
 
 interface TripAlbumScreenProps {
   tripId: string;
+  /** From deep link — enables Join via invite link for non-members. */
+  inviteToken?: string | null;
   onClose: () => void;
   onOpenProfile?: (user: ChatProfile) => void;
   /** Open the trip group chat channel (members only). */
   onOpenTripChat?: (channelId: string) => void;
-}
-
-async function copyText(text: string) {
-  try {
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // ignore
-  }
-  return false;
 }
 
 async function withResolvedAvatar(
@@ -80,11 +79,13 @@ async function withResolvedAvatar(
 
 export function TripAlbumScreen({
   tripId,
+  inviteToken = null,
   onClose,
   onOpenProfile,
   onOpenTripChat,
 }: TripAlbumScreenProps) {
   const insets = useSafeAreaInsets();
+  const edgeBack = useEdgeSwipeBack(onClose);
   const topPad =
     (insets.top > 0 ? insets.top : Platform.OS === 'web' ? PHONE_SAFE_INSETS.top : 12) +
     6;
@@ -111,6 +112,16 @@ export function TripAlbumScreen({
   const [joinBusy, setJoinBusy] = useState(false);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [chatBusy, setChatBusy] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [savingPhotos, setSavingPhotos] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollYRef = useRef(0);
+  const gridTopRef = useRef(0);
+  const tileLayouts = useRef<Record<string, { x: number; y: number; w: number; h: number }>>(
+    {},
+  );
+  const dragSelectingRef = useRef(false);
 
   const isOwner = trip ? isOwnSender(trip.ownerId, meId) : false;
   const isMember = trip ? isTripParticipant(trip, meId) : false;
@@ -129,6 +140,10 @@ export function TripAlbumScreen({
       ''
     );
   }, [trip]);
+
+  useEffect(() => {
+    if (isMember && joinRequests.length > 0) setShowManage(true);
+  }, [isMember, joinRequests.length]);
 
   const refresh = useCallback(async () => {
     await initChat();
@@ -268,9 +283,43 @@ export function TripAlbumScreen({
 
   const copyLink = async () => {
     if (!trip) return;
-    const link = chatRepo.tripInviteLink(trip);
-    const ok = await copyText(link);
-    Alert.alert(ok ? 'Link copied' : 'Invite link', link);
+    let inviter = 'A friend';
+    try {
+      const me = await chatRepo.getMe();
+      inviter = me.fullName || me.firstName || inviter;
+    } catch {
+      // ignore
+    }
+    const message = buildTripInviteShareMessage({
+      inviterName: inviter,
+      trip,
+    });
+    const ok = await copyText(message);
+    Alert.alert(
+      ok ? 'Invite copied' : 'Invite message',
+      ok
+        ? 'Share it in Messages, Instagram, or anywhere — friends can open Abroadster or download it from the App Store.'
+        : message,
+    );
+  };
+
+  const joinViaLink = async () => {
+    if (!trip || isMember || joinBusy) return;
+    const token = inviteToken || trip.inviteToken;
+    if (!token) {
+      Alert.alert('Invite unavailable', 'Ask the host to send a fresh invite link.');
+      return;
+    }
+    setJoinBusy(true);
+    try {
+      await chatRepo.joinTripViaInviteToken(token);
+      await refresh();
+      Alert.alert('You’re in!', `Welcome to the trip to ${trip.destinationCity}.`);
+    } catch (e: any) {
+      Alert.alert('Couldn’t join', e?.message ?? 'Try again or request to join.');
+    } finally {
+      setJoinBusy(false);
+    }
   };
 
   const toggleFollow = async () => {
@@ -391,6 +440,62 @@ export function TripAlbumScreen({
     );
   }
 
+  const selectAtPoint = (x: number, y: number) => {
+    for (const [id, box] of Object.entries(tileLayouts.current)) {
+      if (
+        x >= box.x &&
+        x <= box.x + box.w &&
+        y >= box.y &&
+        y <= box.y + box.h
+      ) {
+        setSelectedIds((prev) => {
+          if (prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+        break;
+      }
+    }
+  };
+
+  const saveSelectedPhotos = async () => {
+    if (selectedIds.size === 0) return;
+    setSavingPhotos(true);
+    try {
+      const perm = await requestPermissionsAsync(true);
+      if (!perm.granted) {
+        Alert.alert(
+          'Permission needed',
+          'Allow photo library access to save album photos.',
+        );
+        return;
+      }
+      const chosen = photos.filter((p) => selectedIds.has(p.id));
+      let saved = 0;
+      for (const ph of chosen) {
+        const url = typeof ph.imageUrl === 'string' ? ph.imageUrl : '';
+        if (!url) continue;
+        const target = `${FileSystem.cacheDirectory}album-${ph.id}.jpg`;
+        const dl = await FileSystem.downloadAsync(url, target);
+        await Asset.create(dl.uri);
+        saved += 1;
+      }
+      Alert.alert(
+        'Saved',
+        saved === 1
+          ? '1 photo saved to your library.'
+          : `${saved} photos saved to your library.`,
+      );
+      setSelectMode(false);
+      setSelectedIds(new Set());
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message || 'Try again.');
+    } finally {
+      setSavingPhotos(false);
+    }
+  };
+
   const following = Boolean(trip.isFollowingAlbum);
   const showAcceptInvite = isInvited;
   const displayStatus = getTripDisplayStatus(trip);
@@ -405,6 +510,7 @@ export function TripAlbumScreen({
       : null;
 
   return (
+    <GestureDetector gesture={edgeBack}>
     <View style={styles.root}>
       <View style={[styles.wash, { height: topPad + 110 }]} />
       <View style={[styles.header, { paddingTop: topPad }]}>
@@ -453,8 +559,13 @@ export function TripAlbumScreen({
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+          scrollYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
       >
         <View style={styles.heroCard}>
           <View style={styles.placeRow}>
@@ -530,12 +641,12 @@ export function TripAlbumScreen({
                 ) : (
                   <>
                     <Ionicons
-                      name={joinRequested ? 'close-circle' : 'paper-plane'}
+                      name={joinRequested ? 'time-outline' : 'paper-plane'}
                       size={14}
                       color={colors.white}
                     />
                     <Text style={styles.joinBesideText}>
-                      {joinRequested ? 'Unrequest' : 'Request to Join'}
+                      {joinRequested ? 'Pending' : 'Request to Join'}
                     </Text>
                   </>
                 )}
@@ -566,7 +677,24 @@ export function TripAlbumScreen({
               <Pressable
                 key={`pending-${u.id}`}
                 style={styles.traveler}
-                onPress={() => onOpenProfile?.(u)}
+                onPress={() => {
+                  if (isMember) {
+                    const req = joinRequests.find((r) => r.profile?.id === u.id);
+                    if (req) {
+                      Alert.alert(
+                        'Join request',
+                        `Approve ${u.firstName} to join this trip?`,
+                        [
+                          { text: 'Decline', style: 'destructive', onPress: () => void respondJoinRequest(req.id, false) },
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Approve', onPress: () => void respondJoinRequest(req.id, true) },
+                        ],
+                      );
+                      return;
+                    }
+                  }
+                  onOpenProfile?.(u);
+                }}
               >
                 <Avatar source={u.avatar} size={52} />
                 <Text style={styles.travelerName} numberOfLines={1}>
@@ -601,6 +729,46 @@ export function TripAlbumScreen({
                 <>
                   <Ionicons name="checkmark-circle" size={16} color={colors.white} />
                   <Text style={styles.joinWideText}>Accept invite</Text>
+                </>
+              )}
+            </Pressable>
+          ) : null}
+
+          {!isMember &&
+          !showAcceptInvite &&
+          !joinRequested &&
+          trip.myJoinStatus !== 'pending' &&
+          (inviteToken || trip.inviteToken) ? (
+            <Pressable
+              style={[styles.joinWide, joinBusy && styles.joinWideOff]}
+              onPress={() => void joinViaLink()}
+              disabled={joinBusy}
+            >
+              {joinBusy ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <>
+                  <Ionicons name="airplane" size={16} color={colors.white} />
+                  <Text style={styles.joinWideText}>Join this trip</Text>
+                </>
+              )}
+            </Pressable>
+          ) : null}
+
+          {!isMember &&
+          !showAcceptInvite &&
+          (joinRequested || trip.myJoinStatus === 'pending') ? (
+            <Pressable
+              style={[styles.joinWide, styles.joinBesideRequested, joinBusy && styles.joinWideOff]}
+              onPress={() => void requestJoin()}
+              disabled={joinBusy}
+            >
+              {joinBusy ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <>
+                  <Ionicons name="time-outline" size={16} color={colors.white} />
+                  <Text style={styles.joinWideText}>Pending</Text>
                 </>
               )}
             </Pressable>
@@ -674,7 +842,70 @@ export function TripAlbumScreen({
         ) : null}
 
         <Text style={styles.sectionEyebrow}>Photos</Text>
-        <View style={styles.gallery}>
+        {isMember && selectMode ? (
+          <View style={styles.selectBar}>
+            <Pressable
+              onPress={() => {
+                setSelectMode(false);
+                setSelectedIds(new Set());
+              }}
+            >
+              <Text style={styles.selectBarAction}>Cancel</Text>
+            </Pressable>
+            <Text style={styles.selectBarCount}>
+              {selectedIds.size} selected
+            </Text>
+            <Pressable
+              disabled={selectedIds.size === 0 || savingPhotos}
+              onPress={() => void saveSelectedPhotos()}
+            >
+              {savingPhotos ? (
+                <ActivityIndicator color={colors.programBlue} />
+              ) : (
+                <Text
+                  style={[
+                    styles.selectBarAction,
+                    selectedIds.size === 0 && { opacity: 0.4 },
+                  ]}
+                >
+                  Save
+                </Text>
+              )}
+            </Pressable>
+          </View>
+        ) : null}
+        <View
+          style={styles.gallery}
+          onLayout={(e) => {
+            gridTopRef.current = e.nativeEvent.layout.y;
+          }}
+          onStartShouldSetResponder={() => selectMode && isMember}
+          onMoveShouldSetResponder={() => selectMode && isMember}
+          onResponderGrant={(e) => {
+            if (!selectMode || !isMember) return;
+            dragSelectingRef.current = true;
+            selectAtPoint(e.nativeEvent.locationX, e.nativeEvent.locationY);
+          }}
+          onResponderMove={(e) => {
+            if (!dragSelectingRef.current) return;
+            selectAtPoint(e.nativeEvent.locationX, e.nativeEvent.locationY);
+            const y = e.nativeEvent.pageY;
+            if (y < 140) {
+              scrollRef.current?.scrollTo({
+                y: Math.max(0, scrollYRef.current - 28),
+                animated: false,
+              });
+            } else if (y > 620) {
+              scrollRef.current?.scrollTo({
+                y: scrollYRef.current + 28,
+                animated: false,
+              });
+            }
+          }}
+          onResponderRelease={() => {
+            dragSelectingRef.current = false;
+          }}
+        >
           {photos.length === 0 ? (
             <View style={styles.emptyGallery}>
               <Ionicons name="images-outline" size={36} color={colors.textMuted} />
@@ -687,27 +918,77 @@ export function TripAlbumScreen({
             </View>
           ) : (
             <View style={styles.grid}>
-              {photos.map((ph, i) => (
-                <Pressable
-                  key={ph.id}
-                  style={[
-                    styles.tile,
-                    {
-                      width: `${100 / GRID}%`,
-                      padding: GAP / 2,
-                    },
-                  ]}
-                  onPress={() => setViewerIndex(i)}
-                >
-                  <View style={styles.tileInner}>
-                    <Image
-                      source={toImageSource(ph.imageUrl)}
-                      style={styles.tileImg}
-                      resizeMode="cover"
-                    />
-                  </View>
-                </Pressable>
-              ))}
+              {photos.map((ph, i) => {
+                const selected = selectedIds.has(ph.id);
+                return (
+                  <Pressable
+                    key={ph.id}
+                    style={[
+                      styles.tile,
+                      {
+                        width: `${100 / GRID}%`,
+                        padding: GAP / 2,
+                      },
+                    ]}
+                    onLayout={(e: LayoutChangeEvent) => {
+                      const { x, y, width, height } = e.nativeEvent.layout;
+                      tileLayouts.current[ph.id] = {
+                        x,
+                        y,
+                        w: width,
+                        h: height,
+                      };
+                    }}
+                    onLongPress={() => {
+                      if (!isMember) return;
+                      setSelectMode(true);
+                      setSelectedIds(new Set([ph.id]));
+                    }}
+                    delayLongPress={280}
+                    onPress={() => {
+                      if (selectMode && isMember) {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(ph.id)) next.delete(ph.id);
+                          else next.add(ph.id);
+                          return next;
+                        });
+                        return;
+                      }
+                      setViewerIndex(i);
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.tileInner,
+                        selected && styles.tileInnerSelected,
+                      ]}
+                    >
+                      <Image
+                        source={toImageSource(ph.imageUrl)}
+                        style={styles.tileImg}
+                        resizeMode="cover"
+                      />
+                      {selectMode && isMember ? (
+                        <View
+                          style={[
+                            styles.selectCheck,
+                            selected && styles.selectCheckOn,
+                          ]}
+                        >
+                          {selected ? (
+                            <Ionicons
+                              name="checkmark"
+                              size={14}
+                              color={colors.white}
+                            />
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
           )}
         </View>
@@ -743,6 +1024,10 @@ export function TripAlbumScreen({
                     />
                   </Pressable>
                 ) : null}
+                <Pressable style={styles.copyInviteBtn} onPress={() => void copyLink()}>
+                  <Ionicons name="link" size={18} color={colors.openJoin} />
+                  <Text style={styles.copyInviteText}>Copy invite link</Text>
+                </Pressable>
                 <Text style={styles.inviteLabel}>Invite travelers</Text>
                 <TextInput
                   value={inviteQuery}
@@ -774,7 +1059,7 @@ export function TripAlbumScreen({
                     ))}
                   </>
                 ) : null}
-                {isOwner && joinRequests.length > 0 ? (
+                {isMember && joinRequests.length > 0 ? (
                   <>
                     <Text style={styles.inviteLabel}>Join requests</Text>
                     {joinRequests.map((r) => (
@@ -825,6 +1110,7 @@ export function TripAlbumScreen({
           ...(trip?.memberIds ?? []),
           ...(trip?.pendingInviteeIds ?? []),
         ]}
+        inviteLink={trip ? chatRepo.tripInviteLink(trip) : null}
         onClose={() => setInviteSheetOpen(false)}
         onConfirm={async (userIds) => {
           const failures: string[] = [];
@@ -850,6 +1136,7 @@ export function TripAlbumScreen({
         }}
       />
     </View>
+    </GestureDetector>
   );
 
   async function inviteUser(user: ChatProfile) {
@@ -1247,6 +1534,24 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   gallery: { marginTop: 0 },
+  selectBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 4,
+  },
+  selectBarAction: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.programBlue,
+  },
+  selectBarCount: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.black,
+  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1260,6 +1565,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8EEF6',
     overflow: 'hidden',
     borderRadius: 2,
+  },
+  tileInnerSelected: {
+    borderWidth: 3,
+    borderColor: colors.programBlue,
+  },
+  selectCheck: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.white,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectCheckOn: {
+    backgroundColor: colors.programBlue,
+    borderColor: colors.white,
   },
   tileImg: {
     width: '100%',
@@ -1308,6 +1634,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   openJoinLabel: { fontFamily: fonts.bold, fontSize: 14 },
+  copyInviteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(52, 199, 89, 0.12)',
+  },
+  copyInviteText: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.openJoin,
+  },
   inviteLabel: {
     fontFamily: fonts.extraBold,
     fontSize: 13,

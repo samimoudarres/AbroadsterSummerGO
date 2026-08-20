@@ -40,6 +40,7 @@ import {
   type StoredUnlock,
 } from '../passport/demoPassport';
 import { countryKeyFromName } from '../passport/countries';
+import { tripInviteShareUrl } from '../trips/inviteLinks';
 
 export { DEMO_ME_ID };
 
@@ -433,46 +434,31 @@ async function persistHostPassportDirect(
     .maybeSingle();
 
   if (existing?.id) {
-    if ((existing.sort_order ?? 0) !== 0) {
-      const { data: others } = await supabase
-        .from('passport_city_ranks')
-        .select('id, sort_order')
-        .eq('user_id', userId)
-        .neq('id', existing.id);
-      for (const row of others ?? []) {
-        await supabase
-          .from('passport_city_ranks')
-          .update({ sort_order: (row.sort_order ?? 0) + 1 })
-          .eq('id', row.id);
-      }
-      await supabase
-        .from('passport_city_ranks')
-        .update({
-          sort_order: 0,
-          source: 'host',
-          country_name: country || undefined,
-          trip_id: null,
-        })
-        .eq('id', existing.id);
-    }
+    // Already ranked — refresh country/source only; never force sort_order 0
+    await supabase
+      .from('passport_city_ranks')
+      .update({
+        source: 'host',
+        country_name: country || undefined,
+      })
+      .eq('id', existing.id);
     return;
   }
 
+  // New host city: append at end of rankings (don't reshuffle existing order)
   const { data: all } = await supabase
     .from('passport_city_ranks')
     .select('id, sort_order')
     .eq('user_id', userId);
-  for (const row of all ?? []) {
-    await supabase
-      .from('passport_city_ranks')
-      .update({ sort_order: (row.sort_order ?? 0) + 1 })
-      .eq('id', row.id);
-  }
+  const maxOrder = (all ?? []).reduce(
+    (m, row) => Math.max(m, row.sort_order ?? 0),
+    -1,
+  );
   await supabase.from('passport_city_ranks').insert({
     user_id: userId,
     city_name: city,
     country_name: country,
-    sort_order: 0,
+    sort_order: maxOrder + 1,
     source: 'host',
     trip_id: null,
   });
@@ -1053,6 +1039,26 @@ export const chatRepo = {
     }
 
     return this.getMe();
+  },
+
+  /** Publish When-In-Use GPS so friends see the same live city (does not change host city). */
+  async publishLiveLocation(input: {
+    latitude: number;
+    longitude: number;
+    locationLabel: string;
+  }): Promise<void> {
+    if (!(await useLive()) || !supabase) return;
+    const me = await this.getMe();
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        live_latitude: input.latitude,
+        live_longitude: input.longitude,
+        live_location_label: input.locationLabel,
+        live_location_at: new Date().toISOString(),
+      })
+      .eq('id', me.id);
+    if (error) throw error;
   },
 
   /** Upload a profile photo and persist avatar_url on profiles (public avatars bucket). */
@@ -2901,8 +2907,24 @@ export const chatRepo = {
     return this.getTrip(tripId as string);
   },
 
+  /** Join via shared invite link token (adds caller as member). */
+  async joinTripViaInviteToken(token: string): Promise<ChatTrip | null> {
+    const trimmed = token.trim();
+    if (!trimmed || trimmed === 'preview') return null;
+    if (!(await useLive())) {
+      return demoChat.joinTripViaInviteToken(trimmed);
+    }
+    const { data: tripId, error } = await supabase!.rpc(
+      'join_trip_via_invite_token',
+      { p_token: trimmed },
+    );
+    if (error) throw error;
+    notifyChatListeners();
+    return tripId ? this.getTrip(tripId as string) : null;
+  },
+
   tripInviteLink(trip: ChatTrip): string {
-    return demoChat.tripInviteLink(trip);
+    return tripInviteShareUrl(trip);
   },
 
   async searchInstitutions(
@@ -3422,6 +3444,11 @@ function mapProfile(row: any): ChatProfile {
       typeof row.host_latitude === 'number' ? row.host_latitude : null,
     hostLongitude:
       typeof row.host_longitude === 'number' ? row.host_longitude : null,
+    liveLatitude:
+      typeof row.live_latitude === 'number' ? row.live_latitude : null,
+    liveLongitude:
+      typeof row.live_longitude === 'number' ? row.live_longitude : null,
+    liveLocationLabel: row.live_location_label ?? null,
     citiesVisited:
       typeof row.cities_visited === 'number' ? row.cities_visited : null,
     countriesVisited:

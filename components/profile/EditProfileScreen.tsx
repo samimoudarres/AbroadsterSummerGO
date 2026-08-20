@@ -13,12 +13,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { BRAND_TEAL, colors, fonts } from '../../constants/theme';
 import type { ChatProfile } from '../../data/chatTypes';
 import { chatRepo } from '../../lib/chat/repository';
 import { changePassword } from '../../lib/auth/changePassword';
 import { requestGalleryPermission } from '../../lib/feed/galleryAssets';
 import { searchPlaces, type PlaceSuggestion } from '../../lib/geocode';
+import { useEdgeSwipeBack } from '../../lib/gestures/useEdgeSwipeBack';
 import { toImageSource } from '../../lib/images';
 import { usePhoneTopPad } from '../../lib/layout/safeArea';
 import { MAPBOX_TOKEN } from '../../lib/mapConfig';
@@ -44,6 +46,7 @@ export function EditProfileScreen({
   initialPanel = 'profile',
 }: EditProfileScreenProps) {
   const topPad = usePhoneTopPad(0);
+  const edgeBack = useEdgeSwipeBack(onClose);
   const [panel, setPanel] = useState<Panel>(initialPanel);
   const [firstName, setFirstName] = useState(profile.firstName);
   const [lastName, setLastName] = useState(profile.lastName);
@@ -178,6 +181,7 @@ export function EditProfileScreen({
   };
 
   return (
+    <GestureDetector gesture={edgeBack}>
     <View style={[styles.root, { paddingTop: 0 }]}>
       <AbroadsterTopBar
         left={
@@ -473,6 +477,7 @@ export function EditProfileScreen({
         }}
       />
     </View>
+    </GestureDetector>
   );
 }
 

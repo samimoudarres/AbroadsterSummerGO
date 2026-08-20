@@ -8,9 +8,11 @@ export type ProfileCoordsInput = {
   studyAbroadProgram?: string | null;
   hostLatitude?: number | null;
   hostLongitude?: number | null;
-  /** Device GPS — used only when near the study-abroad location. */
+  /** Device GPS — used for the live pin when present. */
   liveLatitude?: number | null;
   liveLongitude?: number | null;
+  /** Reverse-geocoded label for live GPS (e.g. "Boston, United States"). */
+  liveLocationLabel?: string | null;
   /** When true, skip city/program scatter so the pin sits on the exact host point. */
   isCurrentUser?: boolean;
 };
@@ -32,22 +34,6 @@ function validCoord(lat: unknown, lng: unknown): boolean {
     Math.abs(lng) <= 180 &&
     !(lat === 0 && lng === 0)
   );
-}
-
-function haversineKm(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number,
-): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const r = 6371;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * r * Math.asin(Math.sqrt(a));
 }
 
 /** City center from hard-coded table or study-program catalog. */
@@ -88,8 +74,8 @@ export function lookupHostCityCenter(
 
 /**
  * Single source of truth for where a profile pin appears on the map.
- * Prefer stored host coords → study program → host city catalog → never a random Paris dump.
- * Device GPS only overlays when near the study-abroad host (does not replace account location).
+ * Live GPS (when published) is the actual current location. Host city / program
+ * is the fallback when the user is not sharing device location.
  */
 export function resolveProfileMapCoords(
   p: ProfileCoordsInput,
@@ -174,25 +160,14 @@ export function resolveProfileMapCoords(
     }
   }
 
-  if (!base) return null;
-
-  // Live GPS only when near the account host city — never replaces Florence/etc. for the pin.
   if (validCoord(p.liveLatitude, p.liveLongitude)) {
-    const nearHost =
-      haversineKm(
-        p.liveLatitude as number,
-        p.liveLongitude as number,
-        base.latitude,
-        base.longitude,
-      ) <= 80;
-    if (nearHost) {
-      return {
-        latitude: p.liveLatitude as number,
-        longitude: p.liveLongitude as number,
-        locationLabel: base.locationLabel,
-        source: 'live',
-      };
-    }
+    const liveLabel = (p.liveLocationLabel || '').trim();
+    return {
+      latitude: p.liveLatitude as number,
+      longitude: p.liveLongitude as number,
+      locationLabel: liveLabel || base?.locationLabel || cityLabel || 'Abroad',
+      source: 'live',
+    };
   }
 
   return base;

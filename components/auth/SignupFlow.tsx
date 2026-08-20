@@ -401,11 +401,19 @@ export function SignupFlow({ onBackToWelcome }: SignupFlowProps) {
 
         {step === 'birthday' ? (
           <>
-            <Text style={s.title}>When's your birthday?</Text>
+            <Text style={s.title}>Verify your age</Text>
             <Text style={s.subtitle}>
-              Scroll to select month, day, and year. This won't be shown on your
-              profile.
+              Abroadster is for users 13 and older. Enter your date of birth.
+              Users under 13 cannot create an account or access social features.
+              Your birthday is not shown on your profile.
             </Text>
+            <View style={styles.ageAssuranceCard}>
+              <Text style={styles.ageAssuranceTitle}>Age assurance</Text>
+              <Text style={styles.ageAssuranceBody}>
+                We verify age at sign-up. If you are under 13, account creation
+                is blocked before you can post, message, or use the map.
+              </Text>
+            </View>
             <BirthdayPicker
               value={draft.birthday}
               onChange={(birthday) => patch({ birthday })}
@@ -767,6 +775,26 @@ const styles = {
     padding: 18,
     borderWidth: 1,
     borderColor: colors.divider,
+  },
+  ageAssuranceCard: {
+    backgroundColor: colors.brandMint,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(23,88,100,0.12)',
+  },
+  ageAssuranceTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: BRAND_TEAL,
+    marginBottom: 6,
+  },
+  ageAssuranceBody: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: BRAND_TEAL,
+    lineHeight: 19,
   },
   termsTitle: {
     fontFamily: fonts.bold,

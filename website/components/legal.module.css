@@ -1,0 +1,87 @@
+.doc {
+  padding: 1.75rem 0 3.5rem;
+  max-width: 46rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.title {
+  margin: 0 0 0.5rem;
+  color: var(--teal);
+  font-family: inherit;
+  font-size: var(--text-title);
+  line-height: 1.2;
+}
+
+.meta {
+  margin: 0 0 1.75rem;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.meta a {
+  color: var(--teal);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.section {
+  margin-bottom: 1.35rem;
+}
+
+.section h2 {
+  margin: 0 0 0.4rem;
+  color: var(--teal);
+  font-family: inherit;
+  font-size: 1.2rem;
+}
+
+.section p {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.box {
+  background: rgba(23, 88, 100, 0.06);
+  border: 1px solid rgba(23, 88, 100, 0.16);
+  border-radius: 10px;
+  padding: 0.95rem 1.05rem;
+  margin: 1rem 0 1.35rem;
+  color: var(--ink);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.box a {
+  color: var(--teal);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.list {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--ink);
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.list li {
+  margin-bottom: 0.4rem;
+}
+
+.lead {
+  margin: 0 0 1rem;
+  color: var(--ink);
+  font-size: 1.1rem;
+  line-height: 1.55;
+}

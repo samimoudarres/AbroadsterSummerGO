@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -53,6 +54,11 @@ export function LoginScreen({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <AuthStepHeader onBack={onBack} />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      >
       <View style={s.stepBody}>
         <Text style={s.title}>Log in</Text>
         <Text style={s.subtitle}>
@@ -134,6 +140,7 @@ export function LoginScreen({
 
         {error ? <Text style={s.error}>{error}</Text> : null}
       </View>
+      </ScrollView>
 
       <View style={s.footer}>
         <Pressable

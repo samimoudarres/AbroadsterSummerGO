@@ -30,22 +30,15 @@ import { Avatar } from '../common/Avatar';
 import { PHONE_SAFE_INSETS } from '../layout/PhoneShell';
 import { CalendarRangeModal } from './CalendarRangeModal';
 import DestinationMapPreview from './DestinationMapPreview';
+import { copyText } from '../../lib/clipboard';
+import {
+  APP_STORE_URL,
+  tripInviteHttpsLink,
+} from '../../lib/trips/inviteLinks';
 
 interface CreateTripScreenProps {
   onClose: () => void;
   onCreated: (trip: ChatTrip) => void;
-}
-
-async function copyText(text: string) {
-  try {
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // fall through
-  }
-  return false;
 }
 
 export function CreateTripScreen({ onClose, onCreated }: CreateTripScreenProps) {
@@ -176,14 +169,34 @@ export function CreateTripScreen({ onClose, onCreated }: CreateTripScreenProps) 
   };
 
   const copyLink = useCallback(async () => {
-    const token = pendingToken ?? 'preview';
-    const link = `abroadster://trip/${token}`;
-    const ok = await copyText(link);
+    if (!pendingToken || pendingToken === 'preview') {
+      Alert.alert(
+        'Create the trip first',
+        'Tap Make it Happen, then copy the invite to share.',
+      );
+      return;
+    }
+    let inviter = 'A friend';
+    try {
+      const me = await chatRepo.getMe();
+      inviter = me.fullName || me.firstName || inviter;
+    } catch {
+      // ignore
+    }
+    const link = tripInviteHttpsLink(pendingToken);
+    const message = [
+      `${inviter} is inviting you to join their trip on Abroadster.`,
+      '',
+      `Open the invite: ${link}`,
+      '',
+      `Don’t have Abroadster yet? Download it free: ${APP_STORE_URL}`,
+    ].join('\n');
+    const ok = await copyText(message);
     Alert.alert(
-      ok ? 'Link copied' : 'Trip link',
+      ok ? 'Invite copied' : 'Trip invite',
       ok
-        ? 'Anyone with this link can open the invite in Abroadster.'
-        : link,
+        ? 'Anyone with this link can open the invite in Abroadster — or download the app.'
+        : message,
     );
   }, [pendingToken]);
 

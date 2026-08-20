@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
   Pressable,
   ScrollView,
@@ -9,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../../constants/theme';
 import type {
@@ -34,6 +36,7 @@ import {
 import { feedImageSource } from '../../lib/feed/feedPhotos';
 import { formatExplorerScore, computeExplorerScoreMiles } from '../../lib/explorerScore';
 import { presentLocalNotification } from '../../lib/trips/push';
+import { useEdgeSwipeBack } from '../../lib/gestures/useEdgeSwipeBack';
 import { PHONE_WIDTH } from '../layout/PhoneShell';
 import { Avatar } from '../common/Avatar';
 import {
@@ -69,6 +72,8 @@ interface ProfileModalProps {
   /** Open AirMail / DM (works without prior friendship). */
   onAirMail?: (userId: string) => void;
   onEditPost?: (postId: string) => void;
+  /** Override bottom inset (0 = full-bleed over hidden nav / album). */
+  overlayBottom?: number;
 }
 
 function schoolAccent(label: string, fallback: string): string {
@@ -121,6 +126,7 @@ export function ProfileModal({
   onProfileUpdated,
   onAirMail,
   onEditPost,
+  overlayBottom,
 }: ProfileModalProps) {
   const [tab, setTab] = useState<'posts' | 'passport'>('posts');
   const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -146,6 +152,7 @@ export function ProfileModal({
   const loadedUserIdRef = useRef<string | null>(null);
   const loadGenRef = useRef(0);
   const navClearance = useBottomNavClearance();
+  const edgeBack = useEdgeSwipeBack(onClose);
   const cellW = Math.max(
     1,
     (gridWidth - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS,
@@ -337,7 +344,7 @@ export function ProfileModal({
             const ok = await new Promise<boolean>((resolve) => {
               Alert.alert(
                 `Block ${user.firstName}?`,
-                'You won’t see each other’s posts, profile, or messages. You can unblock them later in Settings → Privacy.',
+                'You won’t see each other’s posts, profile, or messages. You can unblock them later in Settings → Blocked accounts.',
                 [
                   { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
                   {
@@ -424,56 +431,8 @@ export function ProfileModal({
 
   if (!visible || !user) return null;
 
-  return (
-    <View style={[styles.overlay, { bottom: navClearance }]}>
-      <View style={styles.screen}>
-        <AbroadsterTopBar
-          left={
-            <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Back">
-              <Ionicons
-                name="chevron-back"
-                size={28}
-                color={ABROADSTER_HEADER_ICON}
-              />
-            </Pressable>
-          }
-          right={
-            isSelf ? (
-              <Pressable
-                onPress={() => setSettingsOpen(true)}
-                hitSlop={16}
-                style={styles.menuHit}
-                accessibilityRole="button"
-                accessibilityLabel="Settings"
-              >
-                <Ionicons
-                  name="settings-outline"
-                  size={24}
-                  color={ABROADSTER_HEADER_ICON}
-                />
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={() => setMenuOpen(true)}
-                hitSlop={16}
-                style={styles.menuHit}
-                accessibilityRole="button"
-                accessibilityLabel="Profile options"
-              >
-                <Ionicons
-                  name="ellipsis-horizontal"
-                  size={26}
-                  color={ABROADSTER_HEADER_ICON}
-                />
-              </Pressable>
-            )
-          }
-        />
-
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+  const listHeader = (
+    <>
           <View style={styles.header}>
             <Avatar
               source={chatProfile?.avatar ?? user.avatar}
@@ -487,7 +446,11 @@ export function ProfileModal({
                 label="friends"
                 onPress={() => setFriendsOpen(true)}
               />
-              <Stat value={String(citiesVisited)} label="cities" />
+              <Stat
+                value={String(citiesVisited)}
+                label="cities"
+                onPress={() => goTab('passport')}
+              />
             </View>
           </View>
 
@@ -655,85 +618,141 @@ export function ProfileModal({
               {tab === 'passport' && <View style={styles.tabUnderline} />}
             </Pressable>
           </View>
+    </>
+  );
 
-          {tab === 'posts' ? (
-            <View
-              style={styles.grid}
-              onLayout={(e) => {
-                const w = e.nativeEvent.layout.width;
-                if (w > 0 && Math.abs(w - gridWidth) > 1) setGridWidth(w);
-              }}
-            >
-              {loadingProfile && posts.length === 0 ? (
+  return (
+    <GestureDetector gesture={edgeBack}>
+    <View style={[styles.overlay, { bottom: overlayBottom ?? navClearance }]}>
+      <View style={styles.screen}>
+        <AbroadsterTopBar
+          left={
+            <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Back">
+              <Ionicons
+                name="chevron-back"
+                size={28}
+                color={ABROADSTER_HEADER_ICON}
+              />
+            </Pressable>
+          }
+          right={
+            isSelf ? (
+              <Pressable
+                onPress={() => setSettingsOpen(true)}
+                hitSlop={16}
+                style={styles.menuHit}
+                accessibilityRole="button"
+                accessibilityLabel="Settings"
+              >
+                <Ionicons
+                  name="settings-outline"
+                  size={24}
+                  color={ABROADSTER_HEADER_ICON}
+                />
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => setMenuOpen(true)}
+                hitSlop={16}
+                style={styles.menuHit}
+                accessibilityRole="button"
+                accessibilityLabel="Profile options"
+              >
+                <Ionicons
+                  name="ellipsis-horizontal"
+                  size={26}
+                  color={ABROADSTER_HEADER_ICON}
+                />
+              </Pressable>
+            )
+          }
+        />
+
+        <FlatList
+          data={tab === 'posts' ? posts : []}
+          key={tab}
+          keyExtractor={(post) => post.id}
+          numColumns={tab === 'posts' ? GRID_COLS : 1}
+          ListHeaderComponent={listHeader}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          onLayout={(e) => {
+            const w = e.nativeEvent.layout.width;
+            if (w > 0 && Math.abs(w - gridWidth) > 1) setGridWidth(w);
+          }}
+          columnWrapperStyle={
+            tab === 'posts' ? styles.gridRow : undefined
+          }
+          ListEmptyComponent={
+            tab === 'posts' ? (
+              loadingProfile && posts.length === 0 ? (
                 <View style={styles.postsLoading}>
                   <ActivityIndicator color={colors.brandTeal} />
                   <Text style={styles.emptyPosts}>Loading posts…</Text>
                 </View>
-              ) : posts.length === 0 ? (
-                <Text style={styles.emptyPosts}>No posts yet</Text>
               ) : (
-                posts.map((post, index) => {
-                  const thumb =
-                    post.photoUrls?.[0] != null
-                      ? feedImageSource(post.photoUrls[0])
-                      : null;
-                  const isCollage =
-                    post.displayMode === 'collage' &&
-                    Boolean(post.collageLayoutId);
-                  return (
-                    <Pressable
-                      key={post.id}
-                      onPress={() => setViewerIndex(index)}
-                      style={[
-                        styles.gridCell,
-                        { width: cellW, height: cellW },
-                      ]}
-                    >
-                      {isCollage && post.collageLayoutId ? (
-                        <View
-                          pointerEvents="none"
-                          style={styles.gridCollageWrap}
-                        >
-                          <CollageCanvas
-                            layoutId={post.collageLayoutId}
-                            photos={post.photoUrls ?? []}
-                            crops={post.photoCrops}
-                            width={cellW}
-                            height={cellW}
-                            showPlaceholders={false}
-                            showSlotNumbers={false}
-                          />
-                        </View>
-                      ) : thumb ? (
-                        <Image source={thumb} style={styles.gridImg} />
-                      ) : (
-                        <View
-                          style={[styles.gridImg, styles.gridPlaceholder]}
-                        />
-                      )}
-                      {!isCollage && (post.photoUrls?.length ?? 0) > 1 ? (
-                        <View style={styles.gridBadge}>
-                          <Ionicons
-                            name="copy-outline"
-                            size={12}
-                            color={colors.white}
-                          />
-                        </View>
-                      ) : null}
-                    </Pressable>
-                  );
-                })
-              )}
-            </View>
-          ) : (
-            <PassportPanel
-              userId={user.id}
-              width={PHONE_WIDTH}
-              onOpenTrip={(tripId) => onOpenAlbum?.(tripId)}
-            />
-          )}
-          <View style={{ height: 24 }} />
-        </ScrollView>
+                <Text style={styles.emptyPosts}>No posts yet</Text>
+              )
+            ) : (
+              <PassportPanel
+                userId={user.id}
+                width={PHONE_WIDTH}
+                onOpenTrip={(tripId) => onOpenAlbum?.(tripId)}
+              />
+            )
+          }
+          ListFooterComponent={<View style={{ height: 24 }} />}
+          renderItem={({ item: post, index }) => {
+            const thumb =
+              post.photoUrls?.[0] != null
+                ? feedImageSource(post.photoUrls[0])
+                : null;
+            const isCollage =
+              post.displayMode === 'collage' &&
+              Boolean(post.collageLayoutId);
+            return (
+              <Pressable
+                onPress={() => setViewerIndex(index)}
+                style={[
+                  styles.gridCell,
+                  { width: cellW, height: cellW },
+                ]}
+              >
+                {isCollage && post.collageLayoutId ? (
+                  <View
+                    pointerEvents="none"
+                    style={styles.gridCollageWrap}
+                  >
+                    <CollageCanvas
+                      layoutId={post.collageLayoutId}
+                      photos={post.photoUrls ?? []}
+                      crops={post.photoCrops}
+                      width={cellW}
+                      height={cellW}
+                      showPlaceholders={false}
+                      showSlotNumbers={false}
+                    />
+                  </View>
+                ) : thumb ? (
+                  <Image source={thumb} style={styles.gridImg} />
+                ) : (
+                  <View
+                    style={[styles.gridImg, styles.gridPlaceholder]}
+                  />
+                )}
+                {!isCollage && (post.photoUrls?.length ?? 0) > 1 ? (
+                  <View style={styles.gridBadge}>
+                    <Ionicons
+                      name="copy-outline"
+                      size={12}
+                      color={colors.white}
+                    />
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          }}
+        />
       </View>
 
       {viewerIndex != null ? (
@@ -860,6 +879,7 @@ export function ProfileModal({
         onClose={() => setLegalDoc(null)}
       />
     </View>
+    </GestureDetector>
   );
 }
 
@@ -929,7 +949,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 60,
+    zIndex: 80,
     backgroundColor: colors.white,
   },
   screen: {
@@ -1198,6 +1218,9 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: GRID_GAP,
+  },
+  gridRow: {
     gap: GRID_GAP,
   },
   gridCell: {
