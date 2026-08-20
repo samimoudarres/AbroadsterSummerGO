@@ -8,6 +8,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web --port 8081",
     "lint": "tsc --noEmit",
+    "lint:app": "tsc --noEmit -p tsconfig.app.json",
+    "eas-build-post-install": "npm run lint:app",
     "seed:schools": "node scripts/_export-programs.mjs && node scripts/seed-schools-catalog.mjs",
     "eas:whoami": "expo whoami",
     "eas:login": "eas-cli login",

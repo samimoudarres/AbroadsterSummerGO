@@ -11,6 +11,7 @@ import {
   ensureAgeAllowedForSocial,
   type AgeCheckReason,
 } from '../../lib/auth/ageAssurance';
+import { useAuth } from '../../lib/auth/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type GateState =
