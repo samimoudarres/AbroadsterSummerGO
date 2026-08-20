@@ -165,7 +165,7 @@ export function resolveProfileMapCoords(
     return {
       latitude: p.liveLatitude as number,
       longitude: p.liveLongitude as number,
-      locationLabel: liveLabel || base?.locationLabel || cityLabel || 'Abroad',
+      locationLabel: liveLabel || 'Current location',
       source: 'live',
     };
   }

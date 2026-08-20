@@ -41,6 +41,7 @@ import { reverseGeocodeCity, searchPlaces, type PlaceSuggestion } from '../../li
 import { DEFAULT_CENTER, hasMapboxToken, MAPBOX_TOKEN } from '../../lib/mapConfig';
 import { resolveMapLocation, scatterAround } from '../../lib/userLocation';
 import {
+  getCurrentDeviceLocation,
   requestLocationPermission,
   watchDeviceLocation,
 } from '../../lib/location/deviceLocation';
@@ -158,6 +159,58 @@ async function chatTripsToPins(feed: ChatTrip[]): Promise<TripPin[]> {
   return pins;
 }
 
+function validGps(
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): lat is number {
+  return (
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    !(lat === 0 && lng === 0)
+  );
+}
+
+/** Keep the signed-in user on device GPS — never a study-program city. */
+function pinMeAtDeviceGps(
+  me: UserProfile,
+  gps: { latitude: number; longitude: number } | null,
+  gpsLabel?: string | null,
+): UserProfile {
+  if (!gps || !validGps(gps.latitude, gps.longitude)) {
+    return { ...me, isCurrentUser: true, isFriend: true };
+  }
+  return {
+    ...me,
+    isCurrentUser: true,
+    isFriend: true,
+    locationPrivacy: 'exact',
+    liveLatitude: gps.latitude,
+    liveLongitude: gps.longitude,
+    latitude: gps.latitude,
+    longitude: gps.longitude,
+    locationLabel: gpsLabel
+      ? gpsLabel
+      : gps
+        ? me.locationPrivacy === 'exact' && me.liveLatitude != null
+          ? me.locationLabel
+          : 'Current location'
+        : me.locationLabel,
+  };
+}
+
+function mergeLiveMeIntoPeople(
+  people: UserProfile[],
+  me: UserProfile | undefined,
+  gps: { latitude: number; longitude: number } | null,
+  gpsLabel?: string | null,
+): UserProfile[] {
+  const others = people.filter((u) => !u.isCurrentUser && u.id !== me?.id);
+  if (!me) return others;
+  return [pinMeAtDeviceGps(me, gps, gpsLabel), ...others];
+}
+
 export function MapScreen({
   hideBottomNav = false,
   onMessageUser,
@@ -239,6 +292,12 @@ export function MapScreen({
     latitude: number;
     longitude: number;
   } | null>(null);
+  /** Only written by the device GPS APIs — never host/program coordinates. */
+  const deviceGpsRef = useRef<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const gpsLabelRef = useRef<string | null>(null);
   const hostPinRef = useRef<{
     latitude: number;
     longitude: number;
@@ -440,17 +499,27 @@ export function MapScreen({
 
           const mePin = byId.get(me.id);
           if (mePin) {
+            const gps = deviceGpsRef.current;
+            const liveMe = pinMeAtDeviceGps(mePin, gps, gpsLabelRef.current);
+            byId.set(me.id, liveMe);
             const home = {
               latitude: mePin.latitude,
               longitude: mePin.longitude,
             };
-            userLocationRef.current = home;
-            setUserLocation(home);
-            // Open map on this account's profile pin (Florence, etc.) — once
+            hostPinRef.current = home;
+            if (gps) {
+              userLocationRef.current = gps;
+              setUserLocation(gps);
+            } else if (!userLocationRef.current) {
+              userLocationRef.current = home;
+              setUserLocation(home);
+            }
+            // First open: GPS if we already have it, otherwise the profile pin
             if (!didCenterOnMeRef.current) {
               didCenterOnMeRef.current = true;
-              setCenter(home);
-              setFlyTo({ ...home, zoom: 12.5 });
+              const start = gps ?? home;
+              setCenter(start);
+              setFlyTo({ ...start, zoom: 12.5 });
             }
           }
 
@@ -628,8 +697,9 @@ export function MapScreen({
           '../../lib/map/chatProfileToMapUser'
         );
         const cam = schoolMapTarget(chip.label);
-        const live = userLocationRef.current;
+        const gps = deviceGpsRef.current;
         const mapped: UserProfile[] = [];
+        let backendMe: UserProfile | null = null;
         for (const p of profiles) {
           // Double-check client-side so a loose backend match can't leak through
           const belongs =
@@ -642,13 +712,13 @@ export function MapScreen({
           let pin = chatProfileToMapUser(p, {
             isFriend: friendSet.has(p.id) || isMe,
             isCurrentUser: isMe,
-            ...(isMe && live
-              ? { liveLat: live.latitude, liveLng: live.longitude }
+            ...(isMe && gps
+              ? { liveLat: gps.latitude, liveLng: gps.longitude }
               : {}),
           });
           if (!pin && cam) {
             // Never invent a school-centered pin for the signed-in user.
-            if (p.id === me.id) continue;
+            if (isMe) continue;
             const jittered = scatterAround(
               cam.latitude,
               cam.longitude,
@@ -663,33 +733,43 @@ export function MapScreen({
                 hostCity: p.hostCity || chip.label,
               },
               {
-                isFriend: friendSet.has(p.id) || p.id === me.id,
-                isCurrentUser: p.id === me.id,
+                isFriend: friendSet.has(p.id),
+                isCurrentUser: false,
               },
             );
           }
-          if (pin) mapped.push(pin);
+          if (!pin) continue;
+          if (isMe) {
+            backendMe = pin;
+            continue;
+          }
+          mapped.push(pin);
         }
 
-        setSchoolFilterCohort(mapped);
-        setSchoolFilterTotal(mapped.length);
+        const liveMe =
+          backendMe ||
+          rosterPeople.find((u) => u.isCurrentUser || u.id === me.id) ||
+          friendPeople.find((u) => u.isCurrentUser || u.id === me.id) ||
+          chatProfileToMapUser(me, { isFriend: true, isCurrentUser: true });
+        const cohort = mergeLiveMeIntoPeople(
+          mapped,
+          liveMe ?? undefined,
+          gps,
+          gpsLabelRef.current,
+        );
+
+        setSchoolFilterCohort(cohort);
+        setSchoolFilterTotal(mapped.length + (backendMe ? 1 : 0));
         setRosterPeople((prev) => {
           const byId = new Map(prev.map((u) => [u.id, u]));
-          const liveMe = prev.find((u) => u.isCurrentUser);
-          for (const u of mapped) {
-            if (u.isCurrentUser && liveMe) {
-              byId.set(u.id, {
-                ...u,
-                latitude: liveMe.latitude,
-                longitude: liveMe.longitude,
-                liveLatitude: liveMe.liveLatitude ?? liveMe.latitude,
-                liveLongitude: liveMe.liveLongitude ?? liveMe.longitude,
-                locationPrivacy: liveMe.locationPrivacy,
-                locationLabel: liveMe.locationLabel,
-              });
-            } else {
-              byId.set(u.id, u);
-            }
+          for (const u of mapped) byId.set(u.id, u);
+          const prevMe = prev.find((u) => u.isCurrentUser);
+          const nextMe = prevMe || liveMe;
+          if (nextMe) {
+            byId.set(
+              nextMe.id,
+              pinMeAtDeviceGps(nextMe, gps, gpsLabelRef.current),
+            );
           }
           return [...byId.values()];
         });
@@ -724,7 +804,13 @@ export function MapScreen({
         // School filter: ONLY the verified cohort for that school (not the full roster)
         extraPeople:
           selectedFilters.length > 0
-            ? (schoolFilterCohort ?? [])
+            ? mergeLiveMeIntoPeople(
+                schoolFilterCohort ?? [],
+                rosterPeople.find((u) => u.isCurrentUser) ||
+                  friendPeople.find((u) => u.isCurrentUser),
+                deviceGpsRef.current,
+                gpsLabelRef.current,
+              )
             : rosterPeople.length > 0
               ? rosterPeople
               : friendPeople,
@@ -788,30 +874,70 @@ export function MapScreen({
           longitude: mePin.longitude,
         };
         hostPinRef.current = home;
-        userLocationRef.current = home;
-        setUserLocation(home);
+        if (!deviceGpsRef.current && !userLocationRef.current) {
+          userLocationRef.current = home;
+          setUserLocation(home);
+        }
         locationPrivacyRef.current = mePin.locationPrivacy ?? 'city';
 
-        if (!didCenterOnMeRef.current) {
+        if (!didCenterOnMeRef.current && !deviceGpsRef.current) {
           didCenterOnMeRef.current = true;
           setCenter(home);
           setFlyTo({ ...home, zoom: 12.5 });
         }
 
+        const seedMe = pinMeAtDeviceGps(
+          mePin,
+          deviceGpsRef.current,
+          gpsLabelRef.current,
+        );
         setRosterPeople((prev) => {
           const others = prev.filter((u) => u.id !== me.id);
-          return [mePin, ...others];
+          return [seedMe, ...others];
         });
         setFriendPeople((prev) => {
           const others = prev.filter((u) => u.id !== me.id);
-          return [mePin, ...others];
+          return [seedMe, ...others];
         });
 
         const granted = await requestLocationPermission();
         if (cancelled || !granted) return;
 
-        // Permission granted → Exact mode for this session (When-In-Use only).
         locationPrivacyRef.current = 'exact';
+        const firstFix = await getCurrentDeviceLocation();
+        if (cancelled) return;
+
+        const applyGps = (
+          next: { latitude: number; longitude: number },
+          label?: string,
+        ) => {
+          deviceGpsRef.current = next;
+          userLocationRef.current = next;
+          setUserLocation(next);
+          if (label) gpsLabelRef.current = label;
+          const patch = (u: UserProfile) =>
+            u.isCurrentUser
+              ? pinMeAtDeviceGps(u, next, label || gpsLabelRef.current)
+              : u;
+          setRosterPeople((prev) => prev.map(patch));
+          setFriendPeople((prev) => prev.map(patch));
+          setSchoolFilterCohort((prev) =>
+            prev && prev.length > 0 ? prev.map(patch) : prev,
+          );
+        };
+
+        if (firstFix) {
+          applyGps({
+            latitude: firstFix.latitude,
+            longitude: firstFix.longitude,
+          });
+          if (!didCenterOnMeRef.current) {
+            didCenterOnMeRef.current = true;
+            setCenter(firstFix);
+            setFlyTo({ ...firstFix, zoom: 12.5 });
+          }
+        }
+
         let lastPublishAt = 0;
         let lastPublishLabel = '';
         sub = await watchDeviceLocation((coords) => {
@@ -821,29 +947,7 @@ export function MapScreen({
             latitude: coords.latitude,
             longitude: coords.longitude,
           };
-          userLocationRef.current = next;
-          setUserLocation(next);
-
-          const applyMe = (label?: string) => {
-            const patch = (u: UserProfile) =>
-              u.isCurrentUser
-                ? {
-                    ...u,
-                    locationPrivacy: 'exact' as const,
-                    liveLatitude: next.latitude,
-                    liveLongitude: next.longitude,
-                    latitude: next.latitude,
-                    longitude: next.longitude,
-                    locationLabel: label || u.locationLabel,
-                  }
-                : u;
-            setRosterPeople((prev) => prev.map(patch));
-            setFriendPeople((prev) => prev.map(patch));
-            setSchoolFilterCohort((prev) =>
-              prev && prev.length > 0 ? prev.map(patch) : prev,
-            );
-          };
-          applyMe();
+          applyGps(next);
 
           void (async () => {
             try {
@@ -856,7 +960,7 @@ export function MapScreen({
               const label = geo.countryName
                 ? `${geo.cityName}, ${geo.countryName}`
                 : geo.cityName;
-              applyMe(label);
+              applyGps(next, label);
               const now = Date.now();
               if (
                 label !== lastPublishLabel ||

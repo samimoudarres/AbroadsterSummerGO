@@ -13,6 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { BRAND_TEAL, colors, fonts } from '../../constants/theme';
 import { usePhoneTopPad } from '../../lib/layout/safeArea';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** Figma 160:350 */
 const LOGO = require('../../assets/auth/welcome-logo.png');
@@ -37,6 +38,7 @@ interface WelcomeScreenProps {
  */
 export function WelcomeScreen({ onCreateAccount, onLogin }: WelcomeScreenProps) {
   const topPad = usePhoneTopPad(0);
+  const insets = useSafeAreaInsets();
   const [size, setSize] = useState({ w: FIGMA_W, h: FIGMA_H });
 
   const onLayout = (e: LayoutChangeEvent) => {
@@ -52,9 +54,10 @@ export function WelcomeScreen({ onCreateAccount, onLogin }: WelcomeScreenProps) 
 
   const topBarH = Math.max(84 * sy, topPad + 51 * sy + 2);
 
-  // Lower / shorter than Figma's 576 start → more map
-  const footerContentH = 218 * sy;
-  const footerTop = Math.max(topBarH + 240 * sy, size.h - footerContentH);
+  // Lift CTAs off the home-indicator / screen edge
+  const footerPadBottom = Math.max(insets.bottom, 8) + 44 * sy;
+  const footerContentH = 248 * sy + footerPadBottom;
+  const footerTop = Math.max(topBarH + 200 * sy, size.h - footerContentH);
   const footerH = size.h - footerTop;
 
   const mapTop = topBarH - 10 * sy;
@@ -132,7 +135,11 @@ export function WelcomeScreen({ onCreateAccount, onLogin }: WelcomeScreenProps) 
         <View style={styles.logoSlot}>
           <Image
             source={LOGO}
-            style={{ width: 182 * sx, height: 46 * sy }}
+            style={{
+              width: 182 * sx,
+              height: 46 * sy,
+              backgroundColor: 'transparent',
+            }}
             resizeMode="contain"
           />
         </View>
@@ -145,7 +152,7 @@ export function WelcomeScreen({ onCreateAccount, onLogin }: WelcomeScreenProps) 
             top: footerTop,
             height: footerH,
             paddingHorizontal: sideInset,
-            paddingBottom: 26 * sy,
+            paddingBottom: footerPadBottom,
           },
           Platform.OS === 'web'
             ? styles.footerShadowWeb

@@ -85,5 +85,6 @@ const styles = StyleSheet.create({
   logo: {
     width: LOGO_W,
     height: LOGO_H,
+    backgroundColor: 'transparent',
   },
 });

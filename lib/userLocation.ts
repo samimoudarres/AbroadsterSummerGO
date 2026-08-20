@@ -108,14 +108,17 @@ export function resolveMapLocation(
     return null;
   }
 
-  if (
-    user.locationPrivacy === 'exact' &&
+  const hasLiveGps =
     user.liveLatitude != null &&
-    user.liveLongitude != null
-  ) {
+    user.liveLongitude != null &&
+    Number.isFinite(user.liveLatitude) &&
+    Number.isFinite(user.liveLongitude);
+
+  // Device GPS always wins over host-city / program pins (including school filters).
+  if (hasLiveGps) {
     return {
-      latitude: user.liveLatitude,
-      longitude: user.liveLongitude,
+      latitude: user.liveLatitude as number,
+      longitude: user.liveLongitude as number,
       locationLabel: user.locationLabel,
       source: 'exact',
     };
