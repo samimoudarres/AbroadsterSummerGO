@@ -9,6 +9,7 @@ import {
   Text,
   TextInput,
   View,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -31,6 +32,7 @@ import { BRAND_TEAL, colors, fonts } from '../../constants/theme';
 import { SchoolPicker } from '../schools/SchoolPicker';
 import { AuthStepHeader } from './AuthStepHeader';
 import { BirthdayPicker, defaultBirthday } from './BirthdayPicker';
+import { ensureAgeAllowedForSocial } from '../../lib/auth/ageAssurance';
 import { authStyles as s } from './authStyles';
 import { AvatarCropModal } from '../common/AvatarCropModal';
 import {
@@ -129,6 +131,7 @@ export function SignupFlow({ onBackToWelcome }: SignupFlowProps) {
   };
 
   const goNext = async () => {
+    if (busy) return;
     setError(null);
     if (step === 'name') {
       if (!draft.firstName.trim() || !draft.lastName.trim()) {
@@ -163,6 +166,22 @@ export function SignupFlow({ onBackToWelcome }: SignupFlowProps) {
       if (!isOldEnough(draft.birthday, 13)) {
         setError('You must be at least 13 years old to use Abroadster.');
         return;
+      }
+      if (Platform.OS === 'ios') {
+        Keyboard.dismiss();
+        setBusy(true);
+        try {
+          const apple = await ensureAgeAllowedForSocial();
+          if (!apple.ok) {
+            setError(apple.message);
+            return;
+          }
+        } catch {
+          setError('Could not confirm your age range. Try again in a moment.');
+          return;
+        } finally {
+          setBusy(false);
+        }
       }
       setStep('homeSchool');
       return;
@@ -403,15 +422,16 @@ export function SignupFlow({ onBackToWelcome }: SignupFlowProps) {
           <>
             <Text style={s.title}>Verify your age</Text>
             <Text style={s.subtitle}>
-              Abroadster is for users 13 and older. Enter your date of birth.
-              Users under 13 cannot create an account or access social features.
-              Your birthday is not shown on your profile.
+              {Platform.OS === 'ios'
+                ? 'Abroadster is for users 13 and older. We’ll ask Apple to confirm you’re 13+, then save your date of birth on your account. Users under 13 cannot create an account or access social features. Your birthday is not shown on your profile.'
+                : 'Abroadster is for users 13 and older. Enter your date of birth. Users under 13 cannot create an account or access social features. Your birthday is not shown on your profile.'}
             </Text>
             <View style={styles.ageAssuranceCard}>
               <Text style={styles.ageAssuranceTitle}>Age assurance</Text>
               <Text style={styles.ageAssuranceBody}>
-                We verify age at sign-up. If you are under 13, account creation
-                is blocked before you can post, message, or use the map.
+                {Platform.OS === 'ios'
+                  ? 'Tap Next to open Apple’s Declared Age Range prompt. If you are under 13, account creation is blocked before you can post, message, or use the map.'
+                  : 'We verify age at sign-up. If you are under 13, account creation is blocked before you can post, message, or use the map.'}
               </Text>
             </View>
             <BirthdayPicker
@@ -649,7 +669,9 @@ export function SignupFlow({ onBackToWelcome }: SignupFlowProps) {
                 ? 'Agree and continue'
                 : step === 'photo'
                   ? 'Done'
-                  : 'Next'}
+                  : step === 'birthday' && Platform.OS === 'ios'
+                    ? 'Verify with Apple'
+                    : 'Next'}
             </Text>
           )}
         </Pressable>

@@ -281,7 +281,7 @@ export function SettingsScreen({
               onPress={() => {
                 Alert.alert(
                   'Age assurance',
-                  'Abroadster is for users 13 and older. During sign-up, you must enter your date of birth. Users under 13 cannot create an account or access social features.\n\nTo see this check: sign out, tap Create account, and continue until the Verify your age step.',
+                  'Abroadster is for users 13 and older. On iPhone we use Apple’s Declared Age Range prompt to confirm you are 13+ before map, feed, chat, or trips. Users under 13 cannot create an account or use social features.\n\nYou will also see this system prompt after Log in (including the demo account).',
                 );
               }}
             />

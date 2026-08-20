@@ -16,6 +16,9 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.abroadster.app",
+      "entitlements": {
+        "com.apple.developer.declared-age-range": true
+      },
       "config": {
         "usesNonExemptEncryption": false
       },

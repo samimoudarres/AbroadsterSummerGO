@@ -1,41 +1,34 @@
-# App Store — reply for Aug 19 rejection (Guideline 2.3.6 Age Assurance only)
+# App Store — reply for Guideline 2.3.6 Age Assurance (Declared Age Range)
 # Paste into: Reply to App Review
 
 ================================================================================
 RESOLUTION CENTER REPLY
 ================================================================================
 
-Thank you for reviewing Abroadster again. We understand the confusion and have clarified below.
+Thank you for reviewing Abroadster again.
 
 Our Age Rating answers are:
 • Parental Controls: NO
 • Age Assurance: YES
+• Social media disabled for users under 13: YES (Declared Age Range API)
 
-Abroadster does not include parental controls. We do include age assurance: users must enter their date of birth during sign-up, and users under 13 cannot create an account or access any social features (map, feed, chat, trips, messaging).
+Abroadster does not include parental controls. We do not allow users under 13 at all.
 
-Why the reviewer may not have seen it:
-The demo login credentials we provided skip the sign-up flow entirely, so the age assurance step is not shown when signing in with the demo account.
+Age assurance now uses Apple’s Declared Age Range API (system Age Range sheet) before any social features. This runs:
+• After Log in, including the demo account
+• During Create account on the “Verify your age” step (Verify with Apple)
+
+Users whose Apple Age Range is under 13 are blocked from the map, feed, chat, and trips, and cannot finish creating an account.
 
 How to locate age assurance (please follow exactly):
 1. Launch Abroadster on the review device.
-2. If signed in, go to Profile → Settings → Log out.
-3. On the Welcome screen, note the text: "Abroadster is for ages 13+. Age is verified during sign-up."
-4. Tap Create account (do not use Log in / demo credentials for this test).
-5. Complete: Name → Email/phone → Password.
-6. On the "Verify your age" screen, read the Age assurance card, then enter a date of birth that makes the user under 13 years old.
-7. Tap Next. The app blocks account creation and shows: "You must be at least 13 years old to use Abroadster."
-8. Enter a valid 13+ date of birth to continue onboarding.
+2. Tap Log in and sign in with the demo account, OR tap Create account.
+3. A system Age Range sheet from Apple appears before social features.
+4. Share an age range of 13 or older to continue.
+5. To see the under-13 block: use an Apple Account / Family Sharing child account whose declared range is under 13. The app shows “You must be at least 13 years old to use Abroadster” and does not open social features.
+6. Also: Profile → Settings → Support → “Age requirement (13+)”.
 
-Also in Settings (while signed in):
-Profile → Settings → Support section → tap "Age requirement (13+)" for an explanation of the age assurance mechanism and how to view the sign-up verification step.
-
-Our Privacy Policy and Terms also state the 13+ requirement:
-https://abroadster.vercel.app/privacy
-https://abroadster.vercel.app/terms
-
-We have updated the in-app sign-up screens and Settings to make age assurance easier to find. Build [NEW BUILD NUMBER] includes these clarifications.
-
-We respectfully ask you to re-review using the Create account flow above rather than the demo login when verifying age assurance.
+Demo login is only for testing feed/map/chat AFTER the Apple Age Range check succeeds.
 
 Support: samimoudarres@hotmail.com
 
@@ -43,23 +36,14 @@ Support: samimoudarres@hotmail.com
 APP STORE CONNECT — WHAT YOU DO
 ================================================================================
 
-1) Age Rating (DO NOT change Parental Controls — keep NO)
-   App Information → Age Ratings → Edit
+1) Age Rating
    • Parental Controls: NO
    • Age Assurance: YES
-   • Save (13+ calculated rating is correct)
+   • If present: Social media disabled for users under 13: YES
 
-2) Build a new iOS binary (required — we updated in-app UI)
-   From project root:
-   eas build --platform ios --profile production
-   eas submit --platform ios --profile production
-   Attach the new build to version 1.0.1 in App Store Connect.
+2) Attach the new build (new binary required)
 
-3) Update App Review Information → Notes (replace with block below)
-
-4) Reply to App Review (paste reply above; replace [NEW BUILD NUMBER])
-
-5) Resubmit to App Review
+3) Paste Review Notes below, then Reply + Resubmit
 
 ================================================================================
 REVIEW NOTES (paste into App Review Information → Notes)
@@ -69,16 +53,16 @@ Abroadster — social app for university students studying abroad (13+).
 
 IMPORTANT — AGE ASSURANCE (Guideline 2.3.6)
 Parental Controls: NO. Age Assurance: YES.
-Demo login SKIPS sign-up, so age assurance is NOT visible when using demo credentials.
+We call Apple’s Declared Age Range API before map, feed, chat, and trips.
 
-To verify age assurance:
-1. Sign out (Profile → Settings → Log out)
-2. Tap Create account (not Log in)
-3. Name → Email → Password → Verify your age
-4. Enter DOB under 13 → blocked with "You must be at least 13 years old to use Abroadster."
-5. Or: Profile → Settings → Age requirement (13+)
+To verify (works with demo login — you do not need Create account):
+1. Launch the app and Log in with the demo account below.
+2. Wait for the system Age Range sheet. Share 13+ to enter the app.
+3. Optional: Create account → Verify your age → Verify with Apple.
 
-DEMO LOGIN (for testing main features after age check)
+Under-13 Apple Account: blocked; no social features.
+
+DEMO LOGIN (after Age Range succeeds)
 Email: samimoudarres@gmail.com
 Password: testaccount
 

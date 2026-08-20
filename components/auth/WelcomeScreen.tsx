@@ -186,7 +186,9 @@ export function WelcomeScreen({ onCreateAccount, onLogin }: WelcomeScreenProps) 
             },
           ]}
         >
-          Abroadster is for ages 13+. Age is verified during sign-up.
+          {Platform.OS === 'ios'
+            ? 'Abroadster is for ages 13+. Age is checked with Apple Declared Age Range.'
+            : 'Abroadster is for ages 13+. Age is verified during sign-up.'}
         </Text>
 
         <Pressable

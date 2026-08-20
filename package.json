@@ -31,6 +31,7 @@
     "@supabase/supabase-js": "^2.110.8",
     "@types/mapbox-gl": "^3.4.1",
     "expo": "~57.0.12",
+    "expo-age-range": "^57.0.3",
     "expo-asset": "~57.0.10",
     "expo-blur": "~57.0.2",
     "expo-clipboard": "~57.0.1",

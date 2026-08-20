@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { AuthRoot } from '../components/auth/AuthRoot';
+import { AgeAssuranceGate } from '../components/auth/AgeAssuranceGate';
 import { useAuth } from '../lib/auth/AuthContext';
 import { BRAND_TEAL } from '../constants/theme';
 
@@ -38,7 +39,9 @@ export default function Index() {
 
   return (
     <Suspense fallback={<BootSpinner dark />}>
-      <AppShell />
+      <AgeAssuranceGate>
+        <AppShell />
+      </AgeAssuranceGate>
     </Suspense>
   );
 }

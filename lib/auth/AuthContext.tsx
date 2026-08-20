@@ -23,6 +23,7 @@ import {
   setPasswordRecoveryPending,
 } from './authStorage';
 import { consumePasswordRecoveryUrl } from './passwordReset';
+import { resetAgeAllowedThisSession } from './ageAssurance';
 import { hasSupabase, supabase } from '../supabase';
 import {
   requestLaunchPermissions,
@@ -185,6 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Always leave the signed-in shell, even if network sign-out fails
       setSession(null);
       setOpenMapOnboardingAfterAuth(false);
+      resetAgeAllowedThisSession();
       await setPasswordRecoveryPending(false);
       setPasswordRecovery(false);
     }
@@ -198,6 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setSession(null);
       setOpenMapOnboardingAfterAuth(false);
+      resetAgeAllowedThisSession();
       await setPasswordRecoveryPending(false);
       setPasswordRecovery(false);
     }
