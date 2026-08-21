@@ -23,8 +23,6 @@ export function LegalDoc({
         Effective / Last updated: {effective}
         {' · '}
         <a href={otherHref}>{otherLabel}</a>
-        {' · '}
-        <a href="mailto:samimoudarres@hotmail.com">samimoudarres@hotmail.com</a>
       </p>
       {sections.map((s) => (
         <section key={s.heading} className={styles.section}>
