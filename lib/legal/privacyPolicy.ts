@@ -1,7 +1,7 @@
 /**
  * Abroadster Privacy Policy
  * Effective: August 3, 2026
- * Last updated: August 3, 2026
+ * Last updated: August 21, 2026
  *
  * Written to reflect the data Abroadster actually collects and processes
  * (accounts, profile, location, photos, chat, trips, notifications via Supabase).
@@ -9,7 +9,7 @@
 
 export const PRIVACY_POLICY_TITLE = 'Privacy Policy';
 
-export const PRIVACY_POLICY_EFFECTIVE = 'August 11, 2026';
+export const PRIVACY_POLICY_EFFECTIVE = 'August 21, 2026';
 
 export const PRIVACY_POLICY_SECTIONS: Array<{ heading: string; body: string }> = [
   {
@@ -35,7 +35,7 @@ This Policy is intended to help you understand our practices and to meet transpa
 A. Information you provide
 • Account & identity: first name, last name, login email or phone number, password (stored by our authentication provider in hashed form), date of birth (to enforce our 13+ age requirement), and optional school (.edu) email used for student verification.
 • Profile: home university, study-abroad program, host city and country, semester, bio, and profile photo.
-• Content you create: posts (captions, photos, location labels and coordinates you attach), trip details, trip album photos, chat and AirMail messages, polls, reactions, stamps, friend connections, trip invites and join requests, and similar social content.
+• Content you create: posts (captions, photos, location labels and coordinates you attach), trip details you enter (typically destination city and travel dates—not hotel, flight, or arrival-time fields), trip album photos, chat and AirMail messages, polls, reactions, stamps, friend connections, trip invites and join requests, and similar social content.
 • Communications: messages you send to support, and information in reports or feedback.
 
 B. Information collected automatically
@@ -45,9 +45,10 @@ B. Information collected automatically
 
 C. Location information
 • Study-abroad host city and country come from the schools and city you enter on your profile. That is where you “study,” not necessarily where you are standing.
-• If you allow When-In-Use location while using the map, we read your device GPS only while the app is open, reverse-geocode it to a city/country label, and show that as your current location on the map and in the nearby list so friends can see where you actually are.
+• In Settings you can choose map pin privacy: precise location (When-In-Use GPS while the app is open), approximate city-area only (a non-precise pin near your study-abroad city/program), or hide your pin from others.
+• If you choose precise location and allow When-In-Use location, we read your device GPS only while the app is open, reverse-geocode it to a city/country label, and may show that live pin on the map and nearby list.
 • We store last published live coordinates and city label separately from your host city. We do not request Always / background location.
-• You can decline the location prompt; the map still works using your host city / program pin.
+• If you decline the OS location prompt or choose approximate/hidden privacy, the map uses your host city / program pin (or hides your pin) instead of live GPS.
 
 D. Photos and camera
 • If you grant photo library or camera permission, we access media only when you choose to upload a profile photo, post, chat image, or trip album photo.
@@ -114,8 +115,10 @@ No method of transmission or storage is 100% secure. You are responsible for kee
 
 You can:
 • Edit profile information in the app.
+• Manage map location privacy in Settings (precise, approximate city-area, or hide pin).
 • Manage camera, photos, and notification permissions in device settings.
-• Block or report other users from their profile menu.
+• Control trip album photo visibility for albums you manage (members-only vs visible on profiles as designed).
+• Block users, and report users, posts, or album photos from in-app menus.
 • Delete your account in Settings, or email samimoudarres@hotmail.com.
 
 We will not discriminate against you for exercising privacy rights. We may need to verify your identity before fulfilling a request.`,

@@ -1,6 +1,7 @@
 /** Mirrored from app lib/legal — keep in sync when policies change. */
 export const TERMS_OF_USE_TITLE = 'Terms of Use';
-export const TERMS_OF_USE_EFFECTIVE = 'August 3, 2026';
+
+export const TERMS_OF_USE_EFFECTIVE = 'August 21, 2026';
 
 export const TERMS_OF_USE_SECTIONS: Array<{ heading: string; body: string }> = [
   {
@@ -21,11 +22,12 @@ You must provide accurate registration information and keep it updated. You are 
     heading: '3. The Service',
     body: `Abroadster helps students connect around study-abroad communities and travel. Features may include (and may change over time):
 • School community chats and AirMail messaging
-• Trips, invites, join requests, and trip albums
+• Trips, invites, join requests, and trip albums (including optional private album photos for trip members)
 • A home feed for posts and stamps
-• A map showing people, trips, and programs according to privacy settings
+• A map showing people, trips, and programs according to privacy settings (including location precision choices)
 • Profile, passport, and explorer-score features
 • Push and in-app notifications
+• Report and block tools for safety
 
 We may modify, suspend, or discontinue features. We do not guarantee uninterrupted or error-free operation.`,
   },
@@ -56,17 +58,17 @@ You can delete some content in-product. Deletion from servers may take time and 
 • Use the Service for commercial spam or unauthorized advertising
 • Violate export controls or other applicable laws
 
-We may remove content, limit features, or suspend/terminate accounts that violate these Terms or create risk for the community.`,
+You can report users, posts, or album photos you believe violate these rules. We may remove content, limit features, or suspend/terminate accounts that violate these Terms or create risk for the community.`,
   },
   {
     heading: '7. Safety and trips',
-    body: `Trip planning, map locations, and messaging are tools for coordination among users. Abroadster does not supervise trips, verify travelers' identities beyond account features, arrange transportation, or guarantee anyone's safety.
+    body: `Trip planning, map locations, and messaging are tools for coordination among users. Abroadster does not supervise trips, verify travelers' identities beyond account features, arrange transportation, or guarantee anyone's safety. Upcoming trip visibility and join requests are limited by in-app friendship and privacy rules; Abroadster does not collect hotel, flight, or arrival-time fields as structured trip data.
 
-You are solely responsible for your travel decisions, compliance with local laws, visas, and personal safety. Meet people and travel at your own risk. Use caution when sharing precise location or meeting offline.`,
+You are solely responsible for your travel decisions, compliance with local laws, visas, and personal safety. Meet people and travel at your own risk. Use caution when sharing precise location or meeting offline, and use the location privacy settings in the app when you prefer a less precise map pin.`,
   },
   {
     heading: '8. Permissions',
-    body: `The Service may request access to location, camera, photo library, and notifications. You can refuse or revoke permissions in device settings; some features may not work without them. We use permissions as described in our Privacy Policy.`,
+    body: `The Service may request access to location, camera, photo library, and notifications. You can refuse or revoke permissions in device settings; some features may not work without them. Separately, you can choose how precise your map pin is in Settings. We use permissions and location choices as described in our Privacy Policy.`,
   },
   {
     heading: '9. Intellectual property',
