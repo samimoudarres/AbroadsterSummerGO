@@ -50,6 +50,7 @@ export function SettingsScreen({
   onOpenLegal,
   onLoggedOut,
   onAccountDeleted,
+  onProfileUpdated,
 }: SettingsScreenProps) {
   const { signOut, deleteAccount } = useAuth();
   const edgeBack = useEdgeSwipeBack(onClose);
@@ -211,6 +212,73 @@ export function SettingsScreen({
               icon="key-outline"
               onPress={onChangePassword}
             />
+          </Section>
+
+          <Section title="Location privacy">
+            <Text style={styles.empty}>
+              Choose how precise your map pin is for other students.
+            </Text>
+            {(
+              [
+                {
+                  key: 'exact' as const,
+                  label: 'Precise location',
+                  hint: 'Share your live pin while Abroadster is open',
+                },
+                {
+                  key: 'city' as const,
+                  label: 'Approximate (city area)',
+                  hint: 'Show a general pin near your study-abroad city only',
+                },
+                {
+                  key: 'hidden' as const,
+                  label: 'Hide my pin',
+                  hint: 'Do not show your pin on the map to others',
+                },
+              ] as const
+            ).map((opt) => {
+              const active =
+                (profile.locationPrivacy ?? 'exact') === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  style={styles.privacyRow}
+                  onPress={() => {
+                    void (async () => {
+                      try {
+                        const next = await chatRepo.setMyLocationPrivacy(opt.key);
+                        onProfileUpdated?.({
+                          ...profile,
+                          locationPrivacy: next,
+                          ...(next === 'exact'
+                            ? {}
+                            : {
+                                liveLatitude: null,
+                                liveLongitude: null,
+                                liveLocationLabel: null,
+                              }),
+                        });
+                      } catch (e: any) {
+                        Alert.alert(
+                          'Couldn’t save',
+                          e?.message ?? 'Try again.',
+                        );
+                      }
+                    })();
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.privacyLabel}>{opt.label}</Text>
+                    <Text style={styles.privacyHint}>{opt.hint}</Text>
+                  </View>
+                  <Ionicons
+                    name={active ? 'radio-button-on' : 'radio-button-off'}
+                    size={22}
+                    color={active ? colors.brandTeal ?? '#175864' : colors.textMuted}
+                  />
+                </Pressable>
+              );
+            })}
           </Section>
 
           <Section title="Notifications">
@@ -434,6 +502,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textMuted,
     padding: 14,
+  },
+  privacyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E4E6E6',
+  },
+  privacyLabel: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.black,
+  },
+  privacyHint: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+    lineHeight: 16,
   },
   blockedRow: {
     flexDirection: 'row',

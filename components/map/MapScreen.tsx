@@ -888,7 +888,7 @@ export function MapScreen({
 
         const seedMe = pinMeAtDeviceGps(
           mePin,
-          deviceGpsRef.current,
+          locationPrivacyRef.current === 'exact' ? deviceGpsRef.current : null,
           gpsLabelRef.current,
         );
         setRosterPeople((prev) => {
@@ -903,7 +903,8 @@ export function MapScreen({
         const granted = await requestLocationPermission();
         if (cancelled || !granted) return;
 
-        locationPrivacyRef.current = 'exact';
+        // Respect Settings → location privacy (do not force exact just because OS allowed GPS)
+        if (locationPrivacyRef.current !== 'exact') return;
         const firstFix = await getCurrentDeviceLocation();
         if (cancelled) return;
 

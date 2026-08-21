@@ -73,12 +73,12 @@ We do not sell your personal information for money. We do not use your content t
     heading: '5. How we share information',
     body: `We share information only as described below:
 
-• Other users: profile details and content you post or send (including messages to recipients, trip membership, feed posts, and map presence according to your settings) are visible to other users of the Service as designed.
-• Service providers: vendors that host, store, authenticate, deliver media, provide maps, or send push notifications, under obligations to process data for us.
+• Other users: profile details and content you post or send (including messages to recipients, trip membership, feed posts, and map presence according to your privacy settings) are visible to other users of the Service as designed. Upcoming trip details are limited to destination city and dates for mutual friends; hotel/flight logistics are not collected. Trip album photos can be limited to trip members when the album is set to private.
+• Service providers: vendors that host, store, authenticate, deliver media, provide maps, or send push notifications, under obligations to process data for us (for example our cloud database/auth/storage provider and map providers). These providers process data to operate Abroadster and are not permitted to sell your personal information.
 • Legal & safety: when we believe disclosure is required by law, valid legal process, or to protect the rights, safety, or property of Abroadster, our users, or the public.
 • Business transfers: if we are involved in a merger, acquisition, financing, or sale of assets, information may be transferred as part of that transaction, subject to this Policy or successor protections.
 
-We do not share your phone number or email with other users by default as a public directory listing, except as needed for features you use (for example showing your name on messages you send).`,
+We do not share your phone number or email with other users by default as a public directory listing, except as needed for features you use (for example showing your name on messages you send). We do not sell personal information.`,
   },
   {
     heading: '6. Data retention',
@@ -92,7 +92,7 @@ You may delete your account at any time in the app: Profile → menu → Setting
     heading: '7. Safety, reporting, and blocking',
     body: `Abroadster includes tools to help keep the community safe:
 
-• Report: you can report a user from their profile menu. Reports include a reason and optional details and are reviewed by our team.
+• Report: you can report a user from their profile menu, and report posts or album photos from their menus. Reports include a reason and optional details and are reviewed by our team. Content that violates our Terms may be removed.
 • Block: you can block a user so they cannot easily find or message you. You can manage blocked accounts in Settings.
 • Account deletion: you can permanently delete your account from Settings.
 

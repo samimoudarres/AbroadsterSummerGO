@@ -37,6 +37,8 @@ export interface ChatProfile {
   studentEmail?: string | null;
   phoneNumber?: string | null;
   dateOfBirth?: string | null;
+  /** Map pin privacy: exact GPS, city-area only, or hidden. */
+  locationPrivacy?: 'exact' | 'city' | 'hidden' | null;
 }
 
 export interface PassportCountryUnlock {
@@ -107,6 +109,8 @@ export interface ChatTrip {
   isFollowingAlbum?: boolean;
   /** Latest photo URLs from the trip album (up to 3 for previews) */
   albumPreviewUrls?: string[];
+  /** When true, album photos are only visible to accepted trip members. */
+  photosPrivate?: boolean;
   description?: string | null;
   maxMembers?: number | null;
   inviteToken?: string | null;
@@ -243,6 +247,7 @@ export interface FeedAlbumCard {
   memberIds: string[];
   coverUrls: Array<string | number>;
   isFollowing: boolean;
+  photosPrivate?: boolean;
 }
 
 export interface DmThread {

@@ -25,6 +25,7 @@ import {
   tripOverlapsWeekend,
   tripInDateRange,
 } from '../../lib/trips/dates';
+import { getTripDisplayStatus } from '../../lib/trips/status';
 import { presentLocalNotification } from '../../lib/trips/push';
 import { PHONE_SAFE_INSETS } from '../layout/PhoneShell';
 import { ProfileModal } from '../profile/ProfileModal';
@@ -123,6 +124,13 @@ export function TripsScreen({
       }
 
       const isMine = isTripParticipant(t, me?.id);
+      const isPast = getTripDisplayStatus(t) === 'past';
+      const hasFriend = t.memberIds.some((id) => friendSet.has(id));
+
+      // Upcoming/planning trips: only self or friends (never strangers via school chips)
+      if (!isMine && !isPast && !hasFriend) {
+        return false;
+      }
 
       if (feedTab === 'mine') {
         return isMine;

@@ -189,7 +189,7 @@ export function TaggedTripSheet({
                 <Text style={styles.dateText}>{dateText}</Text>
               </View>
             ) : null}
-            {trip.leavingTime ? (
+            {isMember && trip.leavingTime ? (
               <Text style={styles.desc}>Leaving: {trip.leavingTime}</Text>
             ) : null}
             {typeof trip.maxMembers === 'number' && trip.maxMembers > 0 ? (
@@ -198,7 +198,7 @@ export function TaggedTripSheet({
               </Text>
             ) : null}
 
-            {trip.description ? (
+            {isMember && trip.description ? (
               <Text style={styles.desc}>{trip.description}</Text>
             ) : null}
 

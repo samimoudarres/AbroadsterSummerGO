@@ -200,17 +200,30 @@ function tripMatchesFilters(
       return raw ? locateUser(raw) : null;
     })
     .filter(Boolean) as UserProfile[];
-  if (selectedFilters.length === 0) {
-    // Show trips that include at least one friend you added
+
+  const isPast = trip.status === 'past';
+
+  // Upcoming/planning: always require a friend on the trip (school chips never bypass this)
+  if (!isPast) {
     if (friendIds && friendIds.length > 0) {
-      if (trip.memberIds.some((id) => friendIds.includes(id))) return true;
-      // Demo seed trips still appear alongside live friends
-      if (allowDemoSeedMerge() && members.some((m) => m.isFriend)) return true;
+      if (!trip.memberIds.some((id) => friendIds.includes(id))) {
+        if (!(allowDemoSeedMerge() && members.some((m) => m.isFriend))) {
+          return false;
+        }
+      }
+    } else if (members.length > 0 && !members.some((m) => m.isFriend)) {
       return false;
     }
-    // Demo / seed: use profile flags (or show live trips with no seed members)
+  }
+
+  if (selectedFilters.length === 0) {
+    if (friendIds && friendIds.length > 0) {
+      if (trip.memberIds.some((id) => friendIds.includes(id))) return true;
+      if (allowDemoSeedMerge() && members.some((m) => m.isFriend)) return true;
+      return isPast;
+    }
     if (members.length === 0) return true;
-    return members.some((m) => m.isFriend);
+    return members.some((m) => m.isFriend) || isPast;
   }
   return members.some((m) => matchesDrawerFilters(m, selectedFilters));
 }

@@ -33,6 +33,7 @@ import {
   type CatalogInstitution,
 } from '../schools/catalog';
 import { coordsForHostPersistence } from '../map/resolveProfileCoords';
+import { getTripDisplayStatus } from '../trips/status';
 import {
   ensureHostCity,
   passportForUser,
@@ -1049,6 +1050,7 @@ export const chatRepo = {
   }): Promise<void> {
     if (!(await useLive()) || !supabase) return;
     const me = await this.getMe();
+    if (me.locationPrivacy && me.locationPrivacy !== 'exact') return;
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -1190,17 +1192,25 @@ export const chatRepo = {
     return trips;
   },
 
-  /** Trips feed — full catalog; TripsScreen applies friend vs school visibility. */
+  /** Trips feed — upcoming trips are members + friends only (server + client). */
   async listTripsFeed(): Promise<ChatTrip[]> {
     if (!(await useLive())) return demoChat.listTripsFeed();
     const me = await this.getMe();
-    const out = await fetchTripsFeedBatched(me.id, false);
-    if (!allowDemoSeedMerge()) return out;
-    const demo = await demoChat.listTripsFeed();
-    const seen = new Set(out.map((t) => t.id));
-    for (const t of demo) {
-      if (!seen.has(t.id)) out.push(t);
+    let out = await fetchTripsFeedBatched(me.id, false);
+    if (allowDemoSeedMerge()) {
+      const demo = await demoChat.listTripsFeed();
+      const seen = new Set(out.map((t) => t.id));
+      for (const t of demo) {
+        if (!seen.has(t.id)) out.push(t);
+      }
     }
+    // Defense in depth if older list_trips_feed is still deployed
+    const friendIds = new Set(await this.getFriendIds());
+    out = out.filter((t) => {
+      if (isTripParticipant(t, me.id)) return true;
+      if (getTripDisplayStatus(t) === 'past') return true;
+      return t.memberIds.some((id) => friendIds.has(id));
+    });
     return out;
   },
 
@@ -1842,22 +1852,29 @@ export const chatRepo = {
       });
       if (error) throw error;
       const live: FeedAlbumCard[] = (Array.isArray(data) ? data : []).map(
-        (row: any) => ({
-          albumId: row.album_id,
-          tripId: row.trip_id,
-          destinationCity: row.destination_city,
-          destinationCountry: row.destination_country ?? '',
-          dateStart: row.date_start,
-          dateEnd: row.date_end,
-          dateLabel: row.date_label,
-          ownerId: row.owner_id,
-          memberIds: row.member_ids ?? [],
-          coverUrls:
+        (row: any) => {
+          const photosPrivate = Boolean(row.photos_private);
+          const covers =
             Array.isArray(row.cover_urls) && row.cover_urls.length > 0
               ? row.cover_urls
-              : [...ALBUM_PLACEHOLDER_PHOTOS],
-          isFollowing: Boolean(row.is_following),
-        }),
+              : photosPrivate
+                ? []
+                : [...ALBUM_PLACEHOLDER_PHOTOS];
+          return {
+            albumId: row.album_id,
+            tripId: row.trip_id,
+            destinationCity: row.destination_city,
+            destinationCountry: row.destination_country ?? '',
+            dateStart: row.date_start,
+            dateEnd: row.date_end,
+            dateLabel: row.date_label,
+            ownerId: row.owner_id,
+            memberIds: row.member_ids ?? [],
+            coverUrls: covers,
+            isFollowing: Boolean(row.is_following),
+            photosPrivate,
+          };
+        },
       );
       if (!allowDemoSeedMerge()) return live;
       const demo = await demoChat.listAuthorAlbums(userId, limit);
@@ -2005,6 +2022,72 @@ export const chatRepo = {
       .maybeSingle();
     if (data) return true;
     return demoChat.isFriend(userId);
+  },
+
+  /** Both users have added each other (required to see/join upcoming trips). */
+  async isMutualFriend(userId: string): Promise<boolean> {
+    if (!(await useLive()) || !isUuid(userId)) {
+      return demoChat.isFriend(userId);
+    }
+    const me = await this.getMe();
+    const [{ data: a }, { data: b }] = await Promise.all([
+      supabase!
+        .from('friendships')
+        .select('user_id')
+        .eq('user_id', me.id)
+        .eq('friend_id', userId)
+        .maybeSingle(),
+      supabase!
+        .from('friendships')
+        .select('user_id')
+        .eq('user_id', userId)
+        .eq('friend_id', me.id)
+        .maybeSingle(),
+    ]);
+    return Boolean(a) && Boolean(b);
+  },
+
+  async setMyLocationPrivacy(
+    privacy: 'exact' | 'city' | 'hidden',
+  ): Promise<'exact' | 'city' | 'hidden'> {
+    if (!(await useLive()) || !supabase) return privacy;
+    const { data, error } = await supabase.rpc('set_my_location_privacy', {
+      p_privacy: privacy,
+    });
+    if (error) {
+      // Fallback if migration not applied yet
+      const me = await this.getMe();
+      const { error: upErr } = await supabase
+        .from('profiles')
+        .update({
+          location_privacy: privacy,
+          ...(privacy === 'exact'
+            ? {}
+            : {
+                live_latitude: null,
+                live_longitude: null,
+                live_location_label: null,
+                live_location_at: null,
+              }),
+        })
+        .eq('id', me.id);
+      if (upErr) throw error;
+      return privacy;
+    }
+    const next =
+      data === 'city' || data === 'hidden' || data === 'exact' ? data : privacy;
+    notifyChatListeners();
+    return next;
+  },
+
+  async setAlbumPhotosPrivate(tripId: string, photosPrivate: boolean) {
+    if (!(await useLive()) || !isUuid(tripId)) return;
+    const { error } = await supabase!.rpc('set_album_photos_private', {
+      p_trip_id: tripId,
+      p_private: photosPrivate,
+    });
+    if (error) throw error;
+    notifyChatListeners();
   },
 
   async addFriend(userId: string) {
@@ -3168,6 +3251,7 @@ function mapTripFeedRow(row: any): ChatTrip {
     albumPreviewUrls: (row.album_preview_urls ??
       row.albumPreviewUrls ??
       []) as string[],
+    photosPrivate: Boolean(row.photos_private ?? row.photosPrivate),
     description: row.description ?? null,
     maxMembers: row.max_members ?? row.maxMembers ?? null,
     inviteToken: row.invite_token ?? row.inviteToken ?? null,
@@ -3266,14 +3350,17 @@ async function hydrateTrip(
   let albumId: string | null = null;
   let isFollowingAlbum = false;
   let albumPreviewUrls: string[] = [];
+  let photosPrivate = false;
+  const isMember = memberIds.includes(meId);
 
   const { data: album } = await supabase!
     .from('trip_albums')
-    .select('id')
+    .select('id, photos_private')
     .eq('trip_id', t.id)
     .maybeSingle();
   if (album) {
     albumId = album.id;
+    photosPrivate = Boolean((album as any).photos_private);
     const { data: follow } = await supabase!
       .from('album_followers')
       .select('user_id')
@@ -3281,27 +3368,33 @@ async function hydrateTrip(
       .eq('user_id', meId)
       .maybeSingle();
     isFollowingAlbum = Boolean(follow);
-    const { data: photos } = await supabase!
-      .from('album_photos')
-      .select('image_url')
-      .eq('album_id', album.id)
-      .order('created_at', { ascending: false })
-      .limit(3);
-    albumPreviewUrls = (photos ?? []).map((p: any) => p.image_url as string);
+    if (!photosPrivate || isMember) {
+      const { data: photos } = await supabase!
+        .from('album_photos')
+        .select('image_url')
+        .eq('album_id', album.id)
+        .order('created_at', { ascending: false })
+        .limit(3);
+      albumPreviewUrls = (photos ?? []).map((p: any) => p.image_url as string);
+    }
   }
 
-  const { data: pendingInvites } = await supabase!
-    .from('trip_invites')
-    .select('id, invitee_id')
-    .eq('trip_id', t.id)
-    .eq('status', 'pending');
+  const { data: pendingInvites } = isMember
+    ? await supabase!
+        .from('trip_invites')
+        .select('id, invitee_id')
+        .eq('trip_id', t.id)
+        .eq('status', 'pending')
+    : { data: [] as any[] };
 
-  const { data: channel } = await supabase!
-    .from('channels')
-    .select('id')
-    .eq('trip_id', t.id)
-    .eq('slug', 'trip')
-    .maybeSingle();
+  const { data: channel } = isMember
+    ? await supabase!
+        .from('channels')
+        .select('id')
+        .eq('trip_id', t.id)
+        .eq('slug', 'trip')
+        .maybeSingle()
+    : { data: null };
 
   const pendingInviteeIds = (pendingInvites ?? []).map(
     (i: any) => i.invitee_id as string,
@@ -3320,19 +3413,20 @@ async function hydrateTrip(
     dateLabel: t.date_label ?? '',
     dateStart: t.date_start ?? null,
     dateEnd: t.date_end ?? null,
-    leavingTime: t.leaving_time,
+    leavingTime: isMember ? t.leaving_time : null,
     memberIds,
     myJoinStatus: req?.status ?? null,
     albumId,
     isFollowingAlbum,
     albumPreviewUrls,
-    description: t.description ?? null,
+    photosPrivate,
+    description: isMember ? t.description ?? null : null,
     maxMembers: t.max_members ?? null,
-    inviteToken: t.invite_token ?? null,
-    latitude: t.latitude ?? null,
-    longitude: t.longitude ?? null,
+    inviteToken: isMember ? t.invite_token ?? null : null,
+    latitude: isMember ? t.latitude ?? null : null,
+    longitude: isMember ? t.longitude ?? null : null,
     channelId: channel?.id ?? null,
-    pendingInviteeIds,
+    pendingInviteeIds: isMember ? pendingInviteeIds : [],
     myPendingInviteId: (myInvite?.id as string) ?? null,
   };
 }
@@ -3461,6 +3555,10 @@ function mapProfile(row: any): ChatProfile {
     studentEmail: row.student_email ?? null,
     phoneNumber: row.phone_number ?? null,
     dateOfBirth: row.date_of_birth ?? null,
+    locationPrivacy:
+      row.location_privacy === 'city' || row.location_privacy === 'hidden'
+        ? row.location_privacy
+        : 'exact',
   };
 }
 

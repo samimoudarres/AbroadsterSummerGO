@@ -599,7 +599,7 @@ export function TripAlbumScreen({
               <Text style={styles.dates}>{dateText}</Text>
             </View>
           ) : null}
-          {trip.leavingTime ? (
+          {isMember && trip.leavingTime ? (
             <Text style={styles.metaLine}>Leaving: {trip.leavingTime}</Text>
           ) : null}
           {capacity != null ? (
@@ -607,7 +607,7 @@ export function TripAlbumScreen({
               Capacity: {travelerCount}/{capacity}
             </Text>
           ) : null}
-          {trip.description ? (
+          {isMember && trip.description ? (
             <Text style={styles.desc}>{trip.description}</Text>
           ) : null}
 
@@ -1024,6 +1024,27 @@ export function TripAlbumScreen({
                     />
                   </Pressable>
                 ) : null}
+                {isMember ? (
+                  <Pressable
+                    style={styles.openJoinRow}
+                    onPress={() => void togglePhotosPrivate(!trip.photosPrivate)}
+                  >
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={styles.openJoinLabel}>Private album photos</Text>
+                      <Text style={styles.inviteLabel}>
+                        Only approved trip members can see photos when this is on.
+                        Trip city and dates can still appear on profiles.
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={trip.photosPrivate ? 'toggle' : 'toggle-outline'}
+                      size={34}
+                      color={
+                        trip.photosPrivate ? colors.openJoin : colors.textMuted
+                      }
+                    />
+                  </Pressable>
+                ) : null}
                 <Pressable style={styles.copyInviteBtn} onPress={() => void copyLink()}>
                   <Ionicons name="link" size={18} color={colors.openJoin} />
                   <Text style={styles.copyInviteText}>Copy invite link</Text>
@@ -1219,6 +1240,17 @@ export function TripAlbumScreen({
       await refresh();
     } catch (e: any) {
       Alert.alert('Couldn’t update', e?.message ?? 'Try again');
+    }
+  }
+
+  async function togglePhotosPrivate(next: boolean) {
+    if (!trip || !isMember) return;
+    try {
+      await chatRepo.setAlbumPhotosPrivate(trip.id, next);
+      setTrip({ ...trip, photosPrivate: next });
+      await refresh();
+    } catch (e: any) {
+      Alert.alert('Couldn’t update album privacy', e?.message ?? 'Try again');
     }
   }
 }

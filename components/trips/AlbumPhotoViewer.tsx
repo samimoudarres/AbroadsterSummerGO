@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Alert,
   type ViewToken,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -350,6 +351,65 @@ export function AlbumPhotoViewer({
                   <ShareIcon size={22} color={colors.black} />
                   <Text style={styles.shareLabel}>Share</Text>
                 </Pressable>
+                <Pressable
+                  style={styles.shareBtn}
+                  onPress={() => {
+                    if (!photo) return;
+                    Alert.alert('Report photo', 'Why are you reporting this photo?', [
+                      {
+                        text: 'Inappropriate',
+                        onPress: () =>
+                          void (async () => {
+                            try {
+                              await chatRepo.reportContent({
+                                targetType: 'album_photo',
+                                targetId: photo.id,
+                                reportedUserId: photo.uploaderId,
+                                reason: 'inappropriate',
+                              });
+                              Alert.alert(
+                                'Report submitted',
+                                'Thanks. Our team will review this and remove it if needed. Contact samimoudarres@hotmail.com if you need more help.',
+                              );
+                            } catch (e: any) {
+                              Alert.alert(
+                                'Could not report',
+                                e?.message || 'Try again.',
+                              );
+                            }
+                          })(),
+                      },
+                      {
+                        text: 'Spam or scam',
+                        onPress: () =>
+                          void (async () => {
+                            try {
+                              await chatRepo.reportContent({
+                                targetType: 'album_photo',
+                                targetId: photo.id,
+                                reportedUserId: photo.uploaderId,
+                                reason: 'spam',
+                              });
+                              Alert.alert(
+                                'Report submitted',
+                                'Thanks. Our team will review this.',
+                              );
+                            } catch (e: any) {
+                              Alert.alert(
+                                'Could not report',
+                                e?.message || 'Try again.',
+                              );
+                            }
+                          })(),
+                      },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]);
+                  }}
+                  hitSlop={8}
+                >
+                  <Ionicons name="flag-outline" size={20} color={colors.black} />
+                  <Text style={styles.shareLabel}>Report</Text>
+                </Pressable>
               </View>
             </View>
           );
@@ -458,6 +518,8 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
     paddingHorizontal: 14,
     paddingTop: 12,
   },

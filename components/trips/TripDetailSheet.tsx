@@ -121,13 +121,15 @@ export function TripDetailSheet({
         </View>
 
         <Text style={styles.dateSub}>{trip.dateLabel}</Text>
-        {trip.leavingTime ? (
+        {isParticipant && trip.leavingTime ? (
           <Text style={styles.dateSub}>Leaving: {trip.leavingTime}</Text>
         ) : null}
-        {trip.description ? (
+        {isParticipant && trip.description ? (
           <Text style={styles.dateSub}>{trip.description}</Text>
         ) : null}
-        {typeof trip.maxMembers === 'number' && trip.maxMembers > 0 ? (
+        {isParticipant &&
+        typeof trip.maxMembers === 'number' &&
+        trip.maxMembers > 0 ? (
           <Text style={styles.dateSub}>
             Capacity: {travelerCount}/{trip.maxMembers}
           </Text>
