@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Courier_Prime } from 'next/font/google';
+import { headers } from 'next/headers';
 import { Analytics } from '@vercel/analytics/next';
 import { SiteShell } from '@/components/SiteShell';
 import { SITE } from '@/lib/site';
@@ -38,14 +39,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const headerList = await headers();
+  const isAdminRoute = headerList.get('x-admin-route') === '1';
+
   return (
     <html lang="en" className={courier.variable}>
       <body className={courier.className}>
-        <SiteShell>{children}</SiteShell>
-        <Analytics />
+        {isAdminRoute ? children : <SiteShell>{children}</SiteShell>}
+        {!isAdminRoute ? <Analytics /> : null}
       </body>
     </html>
   );
