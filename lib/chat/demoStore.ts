@@ -2593,9 +2593,52 @@ export const demoChat = {
       }
     }
     await persist();
+    applyTripPassportUnlock({
+      unlocks: state().passportUnlocks,
+      cities: state().passportCities,
+      userId: DEMO_ME_ID,
+      tripId,
+      cityName: trip.destinationCity,
+      countryName: trip.destinationCountry,
+      latitude: trip.latitude,
+      longitude: trip.longitude,
+    });
+    refreshProfilePassportCounts(
+      state().profiles,
+      state().passportUnlocks,
+      state().passportCities,
+    );
+    await persist();
     emit();
     void this.notifyTripFollowers(trip, 'created');
     return enrichTripAlbum(trip);
+  },
+
+  async syncPassportTripCities(): Promise<number> {
+    await loadDemoState();
+    let count = 0;
+    for (const trip of state().trips) {
+      if (!trip.memberIds.includes(DEMO_ME_ID)) continue;
+      applyTripPassportUnlock({
+        unlocks: state().passportUnlocks,
+        cities: state().passportCities,
+        userId: DEMO_ME_ID,
+        tripId: trip.id,
+        cityName: trip.destinationCity,
+        countryName: trip.destinationCountry,
+        latitude: trip.latitude,
+        longitude: trip.longitude,
+      });
+      count += 1;
+    }
+    refreshProfilePassportCounts(
+      state().profiles,
+      state().passportUnlocks,
+      state().passportCities,
+    );
+    await persist();
+    emit();
+    return count;
   },
 
   async attachPendingInvites(

@@ -314,6 +314,8 @@ export function MapScreen({
   const [activeTab, setActiveTab] = useState<'home' | 'messages' | 'trips' | 'map' | 'profile'>('map');
   const [extraTrips, setExtraTrips] = useState<TripPin[]>([]);
   const [friendIds, setFriendIds] = useState<string[] | null>(null);
+  const [mutualFriendIds, setMutualFriendIds] = useState<string[] | null>(null);
+  const [meId, setMeId] = useState<string | null>(null);
   const [friendPeople, setFriendPeople] = useState<UserProfile[]>([]);
   /** All located Abroadster profiles (for nearby student counts). */
   const [rosterPeople, setRosterPeople] = useState<UserProfile[]>([]);
@@ -465,9 +467,15 @@ export function MapScreen({
       const loadFriends = async () => {
         try {
           const me = await chatRepo.getMe();
-          const ids = await chatRepo.getFriendIds();
+          setMeId(me.id);
+          const [ids, mutualIds] = await Promise.all([
+            chatRepo.getFriendIds(),
+            chatRepo.getMutualFriendIds(),
+          ]);
           setFriendIds(ids);
+          setMutualFriendIds(mutualIds);
           const friendSet = new Set(ids);
+          const mutualSet = new Set(mutualIds);
           const { chatProfileToMapUser } = await import(
             '../../lib/map/chatProfileToMapUser'
           );
@@ -479,7 +487,7 @@ export function MapScreen({
             roster = profiles
               .map((p) =>
                 chatProfileToMapUser(p, {
-                  isFriend: friendSet.has(p.id) || p.id === me.id,
+                  isFriend: mutualSet.has(p.id) || p.id === me.id,
                   isCurrentUser: p.id === me.id,
                 }),
               )
@@ -685,7 +693,10 @@ export function MapScreen({
       try {
         const me = await chatRepo.getMe();
         const ids = friendIds ?? (await chatRepo.getFriendIds());
+        const mutual =
+          mutualFriendIds ?? (await chatRepo.getMutualFriendIds());
         const friendSet = new Set(ids);
+        const mutualSet = new Set(mutual);
         const { profiles, total } = await chatRepo.listStudentsAtSchool({
           kind: chip.type,
           label: chip.label,
@@ -710,7 +721,7 @@ export function MapScreen({
 
           const isMe = p.id === me.id;
           let pin = chatProfileToMapUser(p, {
-            isFriend: friendSet.has(p.id) || isMe,
+            isFriend: mutualSet.has(p.id) || isMe,
             isCurrentUser: isMe,
             ...(isMe && gps
               ? { liveLat: gps.latitude, liveLng: gps.longitude }
@@ -815,6 +826,8 @@ export function MapScreen({
               ? rosterPeople
               : friendPeople,
         friendIds: friendIds ?? undefined,
+        mutualFriendIds: mutualFriendIds ?? undefined,
+        currentUserId: meId ?? undefined,
       }),
     [
       center.latitude,
@@ -829,6 +842,8 @@ export function MapScreen({
       rosterPeople,
       friendPeople,
       friendIds,
+      mutualFriendIds,
+      meId,
       schoolFilterCohort,
     ],
   );

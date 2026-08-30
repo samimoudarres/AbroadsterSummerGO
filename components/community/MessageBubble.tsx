@@ -20,6 +20,7 @@ import { chatRepo, isOwnSender, isTripParticipant } from '../../lib/chat/reposit
 import { Avatar } from '../common/Avatar';
 import { PostMessageCard } from './PostMessageCard';
 import { TripMessageCard } from './TripMessageCard';
+import { LinkPreviewCard } from './LinkPreviewCard';
 
 const REACTIONS = ['❤️', '😂', '😮', '😢', '😠', '👍'];
 
@@ -245,6 +246,9 @@ export function MessageBubble({
           ) : null}
           {message.body ? (
             <Text style={styles.body}>{message.body}</Text>
+          ) : null}
+          {message.body && (!message.kind || message.kind === 'text') ? (
+            <LinkPreviewCard text={message.body} isMine={isMine} />
           ) : null}
           <View style={[styles.tail, isMine ? styles.tailMine : styles.tailTheirs]} />
         </View>

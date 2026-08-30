@@ -16,12 +16,11 @@ import {
   isOwnSender,
   subscribeChat,
 } from '../../lib/chat/repository';
-import { useEdgeSwipeBack } from '../../lib/gestures/useEdgeSwipeBack';
+import { SwipeBackScreen } from '../../lib/gestures/useEdgeSwipeBack';
 import { usePhoneTopPad } from '../../lib/layout/safeArea';
 import { FeedPostCard } from '../home/FeedPostCard';
 import { SharePostSheet } from '../home/SharePostSheet';
 import { StampersSheet } from '../home/StampersSheet';
-import { GestureDetector } from 'react-native-gesture-handler';
 
 interface ProfilePostsViewerProps {
   posts: FeedPost[];
@@ -52,7 +51,6 @@ export function ProfilePostsViewer({
   onEditPost,
 }: ProfilePostsViewerProps) {
   const topPad = usePhoneTopPad(4);
-  const edgeBack = useEdgeSwipeBack(onClose);
   const listRef = useRef<FlatList<FeedPost>>(null);
   const [posts, setPosts] = useState(initialPosts);
   const [sharePost, setSharePost] = useState<FeedPost | null>(null);
@@ -106,89 +104,89 @@ export function ProfilePostsViewer({
   );
 
   return (
-    <GestureDetector gesture={edgeBack}>
-    <View style={styles.root}>
-      <View style={[styles.topBar, { paddingTop: topPad }]}>
-        <Pressable onPress={onClose} hitSlop={12} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={28} color={colors.black} />
-        </Pressable>
-        <View style={styles.titleBlock}>
-          <Text style={styles.title}>{authorName}</Text>
-          <Text style={styles.sub}>
-            Posts · {titleIndex + 1} of {posts.length}
-          </Text>
+    <SwipeBackScreen onClose={onClose}>
+      <View style={styles.root}>
+        <View style={[styles.topBar, { paddingTop: topPad }]}>
+          <Pressable onPress={onClose} hitSlop={12} style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={28} color={colors.black} />
+          </Pressable>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>{authorName}</Text>
+            <Text style={styles.sub}>
+              Posts · {titleIndex + 1} of {posts.length}
+            </Text>
+          </View>
+          <View style={styles.iconBtn} />
         </View>
-        <View style={styles.iconBtn} />
-      </View>
 
-      <FlatList
-        ref={listRef}
-        data={posts}
-        keyExtractor={(p) => p.id}
-        onLayout={() => {
-          if (initialIndex > 0) {
-            requestAnimationFrame(() => {
+        <FlatList
+          ref={listRef}
+          data={posts}
+          keyExtractor={(p) => p.id}
+          onLayout={() => {
+            if (initialIndex > 0) {
+              requestAnimationFrame(() => {
+                listRef.current?.scrollToIndex({
+                  index: Math.min(initialIndex, posts.length - 1),
+                  animated: false,
+                });
+              });
+            }
+          }}
+          onScrollToIndexFailed={(info) => {
+            setTimeout(() => {
               listRef.current?.scrollToIndex({
-                index: Math.min(initialIndex, posts.length - 1),
+                index: info.index,
                 animated: false,
               });
-            });
-          }
-        }}
-        onScrollToIndexFailed={(info) => {
-          setTimeout(() => {
-            listRef.current?.scrollToIndex({
-              index: info.index,
-              animated: false,
-            });
-          }, 120);
-        }}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={{ itemVisiblePercentThreshold: 55 }}
-        renderItem={({ item }) => {
-          const author = profiles[item.authorId] ?? null;
-          const stampers = (item.stamperPreviewIds ?? [])
-            .map((id) => profiles[id])
-            .filter(Boolean) as ChatProfile[];
-          return (
-            <View style={styles.cardWrap}>
-              <FeedPostCard
-                post={item}
-                author={author}
-                stampers={stampers}
-                onOpenProfile={onOpenProfile}
-                onOpenStampers={(p) => setStampersPostId(p.id)}
-                onToggleStamp={toggleStamp}
-                onShare={(p) => setSharePost(p)}
-                onOpenLocation={onOpenLocation}
-                onOpenTaggedTrip={onOpenTaggedTrip}
-                isOwnPost={Boolean(meId && isOwnSender(item.authorId, meId))}
-                onEditPost={(p) => onEditPost?.(p.id)}
-                onDeletePost={onDeletePost}
-              />
-            </View>
-          );
-        }}
-      />
+            }, 120);
+          }}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={{ itemVisiblePercentThreshold: 55 }}
+          renderItem={({ item }) => {
+            const author = profiles[item.authorId] ?? null;
+            const stampers = (item.stamperPreviewIds ?? [])
+              .map((id) => profiles[id])
+              .filter(Boolean) as ChatProfile[];
+            return (
+              <View style={styles.cardWrap}>
+                <FeedPostCard
+                  post={item}
+                  author={author}
+                  stampers={stampers}
+                  onOpenProfile={onOpenProfile}
+                  onOpenStampers={(p) => setStampersPostId(p.id)}
+                  onToggleStamp={toggleStamp}
+                  onShare={(p) => setSharePost(p)}
+                  onOpenLocation={onOpenLocation}
+                  onOpenTaggedTrip={onOpenTaggedTrip}
+                  isOwnPost={Boolean(meId && isOwnSender(item.authorId, meId))}
+                  onEditPost={(p) => onEditPost?.(p.id)}
+                  onDeletePost={onDeletePost}
+                />
+              </View>
+            );
+          }}
+        />
 
-      <SharePostSheet
-        post={sharePost}
-        visible={Boolean(sharePost)}
-        onClose={() => setSharePost(null)}
-        onShared={() => setSharePost(null)}
-      />
+        <SharePostSheet
+          post={sharePost}
+          visible={Boolean(sharePost)}
+          onClose={() => setSharePost(null)}
+          onShared={() => setSharePost(null)}
+        />
 
-      <StampersSheet
-        visible={Boolean(stampersPostId)}
-        postId={stampersPostId}
-        onClose={() => setStampersPostId(null)}
-        onOpenProfile={(u) => {
-          setStampersPostId(null);
-          onOpenProfile?.(u);
-        }}
-      />
-    </View>
-    </GestureDetector>
+        <StampersSheet
+          visible={Boolean(stampersPostId)}
+          postId={stampersPostId}
+          onClose={() => setStampersPostId(null)}
+          onOpenProfile={(u) => {
+            setStampersPostId(null);
+            onOpenProfile?.(u);
+          }}
+        />
+      </View>
+    </SwipeBackScreen>
   );
 }
 

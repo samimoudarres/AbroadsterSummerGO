@@ -26,7 +26,7 @@ import { copyText } from '../../lib/clipboard';
 import { demoChat } from '../../lib/chat/demoStore';
 import { confirmChoice } from '../../lib/confirm';
 import { pickExtraFromLibrary } from '../../lib/feed/galleryAssets';
-import { useEdgeSwipeBack } from '../../lib/gestures/useEdgeSwipeBack';
+import { SwipeBackScreen, useEdgeSwipeBack } from '../../lib/gestures/useEdgeSwipeBack';
 import { shortCalendarRange } from '../../lib/trips/dates';
 import { buildTripInviteShareMessage } from '../../lib/trips/inviteLinks';
 import {

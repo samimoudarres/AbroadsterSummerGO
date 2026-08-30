@@ -216,24 +216,25 @@ export function SettingsScreen({
 
           <Section title="Location privacy">
             <Text style={styles.empty}>
-              Choose how precise your map pin is for other students.
+              Only mutual friends can see your map pin. Choose how precise it is when
+              you share it.
             </Text>
             {(
               [
                 {
                   key: 'exact' as const,
                   label: 'Precise location',
-                  hint: 'Share your live pin while Abroadster is open',
+                  hint: 'Share your live pin on the map while Abroadster is open',
                 },
                 {
                   key: 'city' as const,
-                  label: 'Approximate (city area)',
-                  hint: 'Show a general pin near your study-abroad city only',
+                  label: 'City area only',
+                  hint: 'Show a general pin near your study-abroad city (not exact GPS)',
                 },
                 {
                   key: 'hidden' as const,
-                  label: 'Hide my pin',
-                  hint: 'Do not show your pin on the map to others',
+                  label: 'Location off',
+                  hint: 'Hide your pin from the map entirely',
                 },
               ] as const
             ).map((opt) => {

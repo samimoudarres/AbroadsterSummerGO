@@ -40,15 +40,27 @@ function isSeedUserId(id: string): boolean {
 function applyFriendFlag(
   u: UserProfile,
   friendSet: Set<string> | null,
+  mutualSet: Set<string> | null,
 ): UserProfile {
-  if (!friendSet) return u;
+  if (!friendSet && !mutualSet) return u;
   if (u.isCurrentUser) {
     return { ...u, isFriend: true };
   }
+  const isMutual = mutualSet?.has(u.id) ?? friendSet?.has(u.id) ?? u.isFriend;
   if (allowDemoSeedMerge() && isSeedUserId(u.id)) {
-    return { ...u, isFriend: u.isFriend || friendSet.has(u.id) };
+    return { ...u, isFriend: u.isFriend || isMutual };
   }
-  return { ...u, isFriend: friendSet.has(u.id) };
+  return { ...u, isFriend: isMutual };
+}
+
+function canPinUser(
+  user: UserProfile,
+  mutualSet: Set<string> | null,
+): boolean {
+  if (user.isCurrentUser) return user.locationPrivacy !== 'hidden';
+  if (user.locationPrivacy === 'hidden') return false;
+  if (!mutualSet) return user.isFriend;
+  return mutualSet.has(user.id);
 }
 
 export interface VisibleMapData {
@@ -193,6 +205,7 @@ function tripMatchesFilters(
   trip: TripPin,
   selectedFilters: FilterChip[],
   friendIds?: string[],
+  currentUserId?: string,
 ): boolean {
   const members = trip.members
     .map((m) => {
@@ -202,9 +215,11 @@ function tripMatchesFilters(
     .filter(Boolean) as UserProfile[];
 
   const isPast = trip.status === 'past';
+  const isParticipant =
+    currentUserId != null && trip.memberIds.includes(currentUserId);
 
-  // Upcoming/planning: always require a friend on the trip (school chips never bypass this)
-  if (!isPast) {
+  // Upcoming/planning: show if you're on the trip or a friend/mutual is on it
+  if (!isPast && !isParticipant) {
     if (friendIds && friendIds.length > 0) {
       if (!trip.memberIds.some((id) => friendIds.includes(id))) {
         if (!(allowDemoSeedMerge() && members.some((m) => m.isFriend))) {
@@ -217,6 +232,7 @@ function tripMatchesFilters(
   }
 
   if (selectedFilters.length === 0) {
+    if (isParticipant) return true;
     if (friendIds && friendIds.length > 0) {
       if (trip.memberIds.some((id) => friendIds.includes(id))) return true;
       if (allowDemoSeedMerge() && members.some((m) => m.isFriend)) return true;
@@ -241,8 +257,12 @@ export function computeVisibleMapData(options: {
   extraTrips?: TripPin[];
   /** Live friends (and other real users) to show as people pins. */
   extraPeople?: UserProfile[];
-  /** Directed friend ids (people YOU added) — overrides seed isFriend flags when provided. */
+  /** Directed friend ids (legacy) — prefer mutualFriendIds for pins. */
   friendIds?: string[];
+  /** Mutual friend ids — only these users get map pins (plus you). */
+  mutualFriendIds?: string[];
+  /** Current viewer — own trips always show on All pins. */
+  currentUserId?: string;
 }): VisibleMapData {
   const {
     centerLat,
@@ -256,20 +276,26 @@ export function computeVisibleMapData(options: {
     extraTrips = [],
     extraPeople = [],
     friendIds,
+    mutualFriendIds,
+    currentUserId,
   } = options;
 
   const q = searchQuery.trim().toLowerCase();
   const searching = q.length > 0;
   const friendSet =
     friendIds != null ? new Set(friendIds) : null;
+  const mutualSet =
+    mutualFriendIds != null
+      ? new Set(mutualFriendIds)
+      : friendSet;
 
   // Privacy-aware positions for every visible user
   const seedUsers = allUsers
-    .map((u) => locateUser(applyFriendFlag(u, friendSet)))
+    .map((u) => locateUser(applyFriendFlag(u, friendSet, mutualSet)))
     .filter(Boolean) as UserProfile[];
 
   const liveUsers = extraPeople
-    .map((u) => locateUser(applyFriendFlag(u, friendSet)))
+    .map((u) => locateUser(applyFriendFlag(u, friendSet, mutualSet)))
     .filter(Boolean) as UserProfile[];
 
   const byId = new Map<string, UserProfile>();
@@ -314,7 +340,7 @@ export function computeVisibleMapData(options: {
     if (layerFilter === 'upcoming') return t.status === 'upcoming';
     if (layerFilter === 'planning') return t.status === 'planning';
     if (layerFilter === 'programs') return false;
-    return tripMatchesFilters(t, selectedFilters, friendIds);
+    return tripMatchesFilters(t, selectedFilters, friendIds, currentUserId);
   });
 
   const withLiveProgramCounts = (pins: ProgramPin[]): ProgramPin[] =>
@@ -352,17 +378,17 @@ export function computeVisibleMapData(options: {
             }),
           );
 
-  // Program or US-uni chip → pin everyone matching that school (not friends-only).
-  // Default (no chip) → nearby friends only.
+  // Pins: mutual friends only (school list still shows everyone in filteredPeople).
   const mapPeopleBase =
     layerFilter === 'upcoming' ||
     layerFilter === 'planning' ||
     layerFilter === 'programs'
       ? ([] as UserProfile[])
       : schoolFilterOn
-        ? filteredPeople.filter((u) => u.locationPrivacy !== 'hidden')
+        ? filteredPeople.filter((u) => canPinUser(u, mutualSet))
         : nearbyUsers
-            .filter((u) => u.id !== 'user-me' && u.locationPrivacy !== 'hidden')
+            .filter((u) => u.id !== 'user-me')
+            .filter((u) => canPinUser(u, mutualSet))
             .filter((u) => matchesDrawerFilters(u, selectedFilters))
             .slice(0, 40);
 
@@ -404,7 +430,7 @@ export function computeVisibleMapData(options: {
     for (const trip of tripPool) {
       if (layerFilter === 'upcoming' && trip.status !== 'upcoming') continue;
       if (layerFilter === 'planning' && trip.status !== 'planning') continue;
-      if (!tripMatchesFilters(trip, selectedFilters, friendIds)) continue;
+      if (!tripMatchesFilters(trip, selectedFilters, friendIds, currentUserId)) continue;
 
       if (q) {
         const title = tripTitle(trip).toLowerCase();

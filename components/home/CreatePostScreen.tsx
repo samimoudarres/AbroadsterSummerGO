@@ -45,6 +45,7 @@ import { searchPlaces, type PlaceSuggestion } from '../../lib/geocode';
 import { MAPBOX_TOKEN } from '../../lib/mapConfig';
 import { chatRepo, DEMO_ME_ID, initChat } from '../../lib/chat/repository';
 import { usePhoneTopPad } from '../../lib/layout/safeArea';
+import { SwipeBackScreen } from '../../lib/gestures/useEdgeSwipeBack';
 import DestinationMapPreview from '../trips/DestinationMapPreview';
 import { Avatar } from '../common/Avatar';
 import { CollageCanvas } from './create/CollageCanvas';
@@ -432,6 +433,7 @@ export function CreatePostScreen({
   }
 
   return (
+    <SwipeBackScreen onClose={onClose}>
     <View style={[styles.root, { paddingTop: topPad }]}>
       <View style={styles.header}>
         <Pressable
@@ -1030,6 +1032,7 @@ export function CreatePostScreen({
         </ScrollView>
       ) : null}
     </View>
+    </SwipeBackScreen>
   );
 }
 

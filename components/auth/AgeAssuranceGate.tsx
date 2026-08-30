@@ -20,6 +20,9 @@ type GateState =
   | { kind: 'retry'; reason: AgeCheckReason; message: string }
   | { kind: 'blocked' };
 
+/** Prefetch heavy shell while age check runs (Apple sheet may appear on top). */
+void import('../shell/AppShell');
+
 /**
  * Runs Apple Declared Age Range before social tabs so demo login still shows Age Assurance.
  */
@@ -74,9 +77,8 @@ export function AgeAssuranceGate({ children }: { children: React.ReactNode }) {
 
   if (gate.kind === 'checking') {
     return (
-      <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-        <ActivityIndicator color={colors.white} size="large" />
-        <Text style={styles.busyLabel}>Confirming age range…</Text>
+      <View style={[styles.boot, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        <ActivityIndicator color={BRAND_TEAL} size="large" />
       </View>
     );
   }
@@ -119,18 +121,18 @@ export function AgeAssuranceGate({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  boot: {
+    flex: 1,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   root: {
     flex: 1,
     backgroundColor: BRAND_TEAL,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,
-  },
-  busyLabel: {
-    marginTop: 16,
-    fontFamily: fonts.regular,
-    fontSize: 15,
-    color: colors.white,
   },
   title: {
     fontFamily: fonts.extraBold,

@@ -140,6 +140,13 @@ export function PassportPanel({
     try {
       const me = await chatRepo.getMe();
       setMeId(me.id);
+      if (me.id === userId) {
+        try {
+          await chatRepo.syncPassportTripCities();
+        } catch {
+          // migration may not be applied yet
+        }
+      }
       const passport = await chatRepo.getPassport(userId);
       setCachedPassport(userId, passport);
       setData(passport);
@@ -284,6 +291,11 @@ export function PassportPanel({
       {/* Right — city ranking */}
       <View style={[styles.rightCol, { width: rightW }]}>
         <Text style={styles.colLabel}>Cities ranking</Text>
+        {isOwn ? (
+          <Text style={styles.rankHint}>
+            Trip cities appear here automatically. Long-press and drag to reorder.
+          </Text>
+        ) : null}
         <ScrollView
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
@@ -418,6 +430,14 @@ const styles = StyleSheet.create({
     color: colors.openJoin,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  rankHint: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textMuted,
+    lineHeight: 15,
     marginBottom: 8,
     paddingHorizontal: 4,
   },

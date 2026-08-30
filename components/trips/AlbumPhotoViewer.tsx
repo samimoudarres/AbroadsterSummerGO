@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '../../constants/theme';
 import type { AlbumPhoto, ChatProfile } from '../../data/chatTypes';
 import { chatRepo } from '../../lib/chat/repository';
+import { SwipeBackScreen } from '../../lib/gestures/useEdgeSwipeBack';
 import { getImageAspect } from '../../lib/feed/imageAspect';
 import { timeAgo } from '../../lib/feed/timeAgo';
 import { toImageSource } from '../../lib/images';
@@ -278,6 +279,7 @@ export function AlbumPhotoViewer({
   }, [photo, picked, shareTargets, uploader?.fullName]);
 
   return (
+    <SwipeBackScreen onClose={onClose}>
     <View style={styles.root}>
       <View style={[styles.topBar, { paddingTop: topPad }]}>
         <Pressable onPress={onClose} hitSlop={12} style={styles.iconBtn}>
@@ -469,6 +471,7 @@ export function AlbumPhotoViewer({
         </View>
       ) : null}
     </View>
+    </SwipeBackScreen>
   );
 }
 

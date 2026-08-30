@@ -1205,13 +1205,55 @@ export const chatRepo = {
       }
     }
     // Defense in depth if older list_trips_feed is still deployed
-    const friendIds = new Set(await this.getFriendIds());
+    const friendIds = new Set(await this.getMutualFriendIds());
     out = out.filter((t) => {
       if (isTripParticipant(t, me.id)) return true;
       if (getTripDisplayStatus(t) === 'past') return true;
       return t.memberIds.some((id) => friendIds.has(id));
     });
     return out;
+  },
+
+  async getMutualFriendIds(): Promise<string[]> {
+    if (!(await useLive())) {
+      const ids = await demoChat.getFriendIds();
+      return ids;
+    }
+    try {
+      const { data, error } = await supabase!.rpc('list_mutual_friend_ids');
+      if (!error && Array.isArray(data)) {
+        const live = data.filter((id): id is string => typeof id === 'string');
+        if (!allowDemoSeedMerge()) return live;
+        const demoFriends = await demoChat.getFriendIds();
+        return [...new Set([...live, ...demoFriends])];
+      }
+    } catch {
+      // fall through
+    }
+    const me = await this.getMe();
+    const { data: outbound } = await supabase!
+      .from('friendships')
+      .select('friend_id')
+      .eq('user_id', me.id);
+    const outIds = (outbound ?? []).map((r: any) => r.friend_id as string);
+    if (outIds.length === 0) return [];
+    const { data: inbound } = await supabase!
+      .from('friendships')
+      .select('user_id')
+      .eq('friend_id', me.id)
+      .in('user_id', outIds);
+    const inSet = new Set((inbound ?? []).map((r: any) => r.user_id as string));
+    return outIds.filter((id) => inSet.has(id));
+  },
+
+  async syncPassportTripCities(): Promise<number> {
+    if (!(await useLive()) || !supabase) {
+      return demoChat.syncPassportTripCities?.() ?? 0;
+    }
+    const { data, error } = await supabase.rpc('passport_sync_my_trip_cities');
+    if (error) throw error;
+    notifyChatListeners();
+    return typeof data === 'number' ? data : 0;
   },
 
   async getFriendIds(): Promise<string[]> {
