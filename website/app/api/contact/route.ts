@@ -89,13 +89,18 @@ async function notifyOwner(opts: {
     }
   }
 
-  // Server-side only fallback (visitor never sees the inbox address)
+  // Server-side only fallback (visitor never sees the inbox address).
+  // FormSubmit requires a real Origin/Referer; without them cloud hosts get 403.
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'https://abroadster.vercel.app';
   try {
     const res = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(to)}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        Origin: siteUrl,
+        Referer: `${siteUrl}/contact`,
       },
       body: JSON.stringify({
         name: opts.name,
@@ -113,7 +118,13 @@ async function notifyOwner(opts: {
       success?: string | boolean;
       message?: string;
     };
-    if (!res.ok) {
+    const accepted =
+      res.ok &&
+      (json.success === true ||
+        json.success === 'true' ||
+        // First-time: FormSubmit emails an Activate link to CONTACT_TO
+        /activat/i.test(String(json.message || '')));
+    if (!accepted) {
       console.error('FormSubmit notify failed', res.status, json);
       return {
         ok: false,
