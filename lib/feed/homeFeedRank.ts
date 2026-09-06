@@ -7,8 +7,8 @@ export type FeedRankContext = {
 };
 
 /**
- * Home feed ranking: recent posts rise fast; friends / shared schools /
- * engagement still boost relevance. Higher score → higher in the feed.
+ * Home feed ranking: recent posts rise fast; your own fresh posts pin to the
+ * top so a new share appears first. Friends / schools / stamps still boost.
  */
 export function scoreHomeFeedPost(
   post: FeedPost,
@@ -23,7 +23,10 @@ export function scoreHomeFeedPost(
   const recency = 1000 / (1 + hours / 12);
 
   let score = recency;
-  if (post.authorId === ctx.meId) score += 80;
+  if (post.authorId === ctx.meId) {
+    // Soft-pin own posts from the last 6h so create → home lands at #1
+    score += hours <= 6 ? 2500 : 600;
+  }
   if (ctx.friendIds.has(post.authorId)) score += 450;
   if (
     author?.studyAbroadProgram &&

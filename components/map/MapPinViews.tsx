@@ -22,8 +22,16 @@ function PinCaption({ title, subtitle }: { title: string; subtitle?: string }) {
 }
 
 /** Soft outer halo so Mapbox MarkerViews show colored glow. */
-function GlowHalo({ color, size }: { color: string; size: number }) {
-  const halo = size + 20;
+function GlowHalo({
+  color,
+  size,
+  stronger,
+}: {
+  color: string;
+  size: number;
+  stronger?: boolean;
+}) {
+  const halo = size + (stronger ? 26 : 20);
   return (
     <View
       pointerEvents="none"
@@ -34,6 +42,7 @@ function GlowHalo({ color, size }: { color: string; size: number }) {
           height: halo,
           borderRadius: halo / 2,
           backgroundColor: color,
+          opacity: stronger ? 0.5 : 0.38,
           left: (size - halo) / 2,
           top: (size - halo) / 2,
         },
@@ -140,7 +149,7 @@ export function TripPinView({
   return (
     <Pressable onPress={onPress} style={styles.pinWrap} hitSlop={6}>
       <View style={{ width: size, height: size }}>
-        <GlowHalo color={glow} size={size} />
+        <GlowHalo color={glow} size={size} stronger={trip.status === 'past'} />
         <View
           style={[
             styles.personRing,
@@ -282,7 +291,11 @@ export function ClusterPinView({
   return (
     <Pressable onPress={onPress} style={styles.pinWrap} hitSlop={6}>
       <View style={{ width: size, height: size }}>
-        <GlowHalo color={glow} size={size} />
+        <GlowHalo
+          color={glow}
+          size={size}
+          stronger={cluster.glowKind === 'past'}
+        />
         <View
           style={[
             styles.personRing,
@@ -417,7 +430,6 @@ const styles = StyleSheet.create({
   },
   glowHalo: {
     position: 'absolute',
-    opacity: 0.38,
     zIndex: 0,
   },
   personRing: {

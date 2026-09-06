@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as MediaLibrary from 'expo-media-library/legacy';
 
 export type GalleryAsset = {
   id: string;
@@ -9,11 +8,19 @@ export type GalleryAsset = {
   height?: number;
 };
 
+/** Native-only: never import expo-media-library on web (no native module). */
+async function loadMediaLibrary() {
+  if (Platform.OS === 'web') return null;
+  return import('expo-media-library/legacy');
+}
+
 export async function requestGalleryPermission(): Promise<boolean> {
   if (Platform.OS === 'web') return true;
   const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (lib.status !== 'granted') return false;
   try {
+    const MediaLibrary = await loadMediaLibrary();
+    if (!MediaLibrary) return lib.status === 'granted';
     const { status } = await MediaLibrary.requestPermissionsAsync();
     return status === 'granted' || lib.status === 'granted';
   } catch {
@@ -29,6 +36,8 @@ export async function loadGalleryAssets(): Promise<GalleryAsset[]> {
   if (!ok || Platform.OS === 'web') return [];
 
   try {
+    const MediaLibrary = await loadMediaLibrary();
+    if (!MediaLibrary) return [];
     const page = await MediaLibrary.getAssetsAsync({
       first: 60,
       mediaType: MediaLibrary.MediaType.photo,
@@ -76,4 +85,15 @@ export async function pickExtraFromLibrary(
     width: a.width,
     height: a.height,
   }));
+}
+
+/** Save a local file URI into the device photo library (native only). */
+export async function saveUriToLibrary(uri: string): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  const MediaLibrary = await loadMediaLibrary();
+  if (!MediaLibrary) return false;
+  const perm = await MediaLibrary.requestPermissionsAsync();
+  if (!perm.granted) return false;
+  await MediaLibrary.createAssetAsync(uri);
+  return true;
 }

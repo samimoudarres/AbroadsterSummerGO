@@ -224,49 +224,52 @@ export function CommunityScreen({
   }, [schoolChannelId, channelMuted]);
 
   const hydrateMessageExtras = useCallback(async (msgs: ChatMessage[]) => {
-    const map: Record<string, ChatProfile> = { ...profiles };
-    const tripMap = { ...trips };
-    const pollMap = { ...polls };
-    const postMap = { ...posts };
+    const profileAdds: Record<string, ChatProfile> = {};
+    const tripAdds: Record<string, ChatTrip> = {};
+    const pollAdds: Record<string, PollData> = {};
+    const postAdds: Record<string, FeedPost> = {};
+
     for (const m of msgs) {
-      if (m.senderId && !map[m.senderId]) {
+      if (m.senderId && !profileAdds[m.senderId]) {
         const p = await chatRepo.getProfile(m.senderId);
-        if (p) map[m.senderId] = p;
+        if (p) profileAdds[m.senderId] = p;
       }
       const tripKey =
         m.tripId ||
         (typeof m.metadata?.tripId === 'string' ? m.metadata.tripId : null);
-      if (tripKey && !tripMap[tripKey]) {
+      if (tripKey && !tripAdds[tripKey]) {
         const t = await chatRepo.getTrip(tripKey);
-        if (t) tripMap[tripKey] = t;
+        if (t) tripAdds[tripKey] = t;
       }
-      if (m.pollId && !pollMap[m.pollId]) {
+      if (m.pollId && !pollAdds[m.pollId]) {
         const p = await chatRepo.getPoll(m.pollId);
-        if (p) pollMap[m.pollId] = p;
+        if (p) pollAdds[m.pollId] = p;
       }
       if (m.postId) {
         const loaded = await chatRepo.getPost(m.postId);
         if (loaded) {
-          postMap[m.postId] = loaded;
-          if (loaded.authorId && !map[loaded.authorId]) {
+          postAdds[m.postId] = loaded;
+          if (loaded.authorId && !profileAdds[loaded.authorId]) {
             const ap = await chatRepo.getProfile(loaded.authorId);
-            if (ap) map[loaded.authorId] = ap;
+            if (ap) profileAdds[loaded.authorId] = ap;
           }
         }
       } else if (
         m.kind === 'post' &&
         typeof m.metadata?.authorId === 'string' &&
-        !map[m.metadata.authorId]
+        !profileAdds[m.metadata.authorId]
       ) {
         const ap = await chatRepo.getProfile(m.metadata.authorId);
-        if (ap) map[m.metadata.authorId] = ap;
+        if (ap) profileAdds[m.metadata.authorId] = ap;
       }
     }
-    setProfiles(map);
-    setTrips(tripMap);
-    setPolls(pollMap);
-    setPosts(postMap);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Functional updates so we never wipe profiles loaded for the open DM
+    setProfiles((prev) => ({ ...prev, ...profileAdds }));
+    setTrips((prev) => ({ ...prev, ...tripAdds }));
+    setPolls((prev) => ({ ...prev, ...pollAdds }));
+    setPosts((prev) => ({ ...prev, ...postAdds }));
+  }, []);
 
   const refreshMessages = useCallback(
     async (mode: 'replace' | 'poll' | 'older' = 'replace') => {
@@ -366,6 +369,9 @@ export function CommunityScreen({
         setTripChannelTitle(null);
         const abroadComm = comms.find((c) => c.kind === 'abroad') ?? comms[0];
         setActiveCommunityId(abroadComm?.id ?? null);
+        void chatRepo.getProfile(last.otherUserId).then((p) => {
+          if (p) setProfiles((m) => ({ ...m, [last.otherUserId]: p }));
+        });
       } else if (last?.type === 'trip') {
         setDmThreadId(null);
         setDmOtherId(null);
@@ -443,6 +449,8 @@ export function CommunityScreen({
           threadId: thread.id,
           otherUserId: initialDmUserId,
         });
+        const p = await chatRepo.getProfile(initialDmUserId);
+        if (p) setProfiles((m) => ({ ...m, [initialDmUserId]: p }));
       } catch (e: any) {
         Alert.alert(
           'Can’t message yet',
@@ -604,13 +612,29 @@ export function CommunityScreen({
   }, [messages]);
 
   const dmOther = dmOtherId ? profiles[dmOtherId] : null;
+  const dmDisplayName =
+    dmOther?.fullName?.trim() ||
+    [dmOther?.firstName, dmOther?.lastName].filter(Boolean).join(' ').trim() ||
+    null;
   const headerTitle = dmOtherId
-    ? dmOther?.fullName ?? 'Airmail'
+    ? dmDisplayName
     : tripChannelTitle
       ? tripChannelTitle
       : activeSlug === 'general'
         ? null
         : `# ${activeSlug.charAt(0).toUpperCase() + activeSlug.slice(1)}`;
+
+  useEffect(() => {
+    if (!dmOtherId) return;
+    let cancelled = false;
+    void chatRepo.getProfile(dmOtherId).then((p) => {
+      if (cancelled || !p) return;
+      setProfiles((m) => ({ ...m, [dmOtherId]: p }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dmOtherId]);
 
   return (
     <GestureDetector gesture={edgeSwipe}>
@@ -702,7 +726,7 @@ export function CommunityScreen({
           )}
         </View>
 
-        {dmOtherId && headerTitle ? (
+        {dmOtherId ? (
           <Pressable
             style={styles.dmHeaderRow}
             onPress={() => {
@@ -742,11 +766,11 @@ export function CommunityScreen({
           >
             <Avatar
               source={dmOther?.avatar}
-              name={headerTitle}
+              name={dmDisplayName || dmOther?.firstName || 'User'}
               size={28}
             />
             <Text style={styles.dmHeaderText} numberOfLines={1}>
-              Airmail · {headerTitle}
+              Airmail · {dmDisplayName || '…'}
             </Text>
           </Pressable>
         ) : headerTitle ? (
@@ -1180,6 +1204,8 @@ export function CommunityScreen({
                   threadId: thread.id,
                   otherUserId: userId,
                 });
+                const p = await chatRepo.getProfile(userId);
+                if (p) setProfiles((m) => ({ ...m, [userId]: p }));
               } catch (e: any) {
                 Alert.alert(
                   'Can’t open AirMail',

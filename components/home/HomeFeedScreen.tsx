@@ -126,8 +126,28 @@ export function HomeFeedScreen({
   }, [refresh]);
 
   useEffect(() => {
-    if (feedNonce > 0) void refresh();
-  }, [feedNonce, refresh]);
+    if (feedNonce <= 0) return;
+    let cancelled = false;
+    (async () => {
+      await refresh();
+      if (cancelled || !focusPostId) return;
+      // Ensure the post we just shared is visible at the top even if ranking lags
+      try {
+        const fresh = await chatRepo.getPost(focusPostId);
+        if (cancelled || !fresh) return;
+        setPosts((prev) => {
+          const rest = prev.filter((p) => p.id !== fresh.id);
+          return [fresh, ...rest];
+        });
+        await loadProfiles([fresh.authorId, ...(fresh.stamperPreviewIds ?? [])]);
+      } catch {
+        // refresh already ran
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [feedNonce, refresh, focusPostId, loadProfiles]);
 
   const rows = useMemo(() => {
     const out: FeedRow[] = [];
@@ -158,7 +178,7 @@ export function HomeFeedScreen({
       (r) => r.type === 'post' && r.post.id === focusPostId,
     );
     if (index < 0) {
-      onConsumedFocusPost?.();
+      // Wait for refresh / prepend — don't clear focus yet
       return;
     }
     setHighlightPostId(focusPostId);

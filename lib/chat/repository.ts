@@ -1517,7 +1517,31 @@ export const chatRepo = {
       const live: FeedPost[] = (Array.isArray(data) ? data : [])
         .map(mapFeedPostRow)
         .filter((p) => !blocked.has(p.authorId));
-      if (!allowDemoSeedMerge()) return live;
+
+      const me = await this.getMe();
+      const friendIds = new Set(await this.getFriendIds());
+      const { scoreHomeFeedPost, sortHomeFeedPosts } = await import(
+        '../feed/homeFeedRank'
+      );
+
+      const rankLive = async (posts: FeedPost[]) => {
+        const authors = await Promise.all(
+          [...new Set(posts.map((p) => p.authorId))].map((id) =>
+            this.getProfile(id),
+          ),
+        );
+        const byId = new Map(
+          authors.filter(Boolean).map((p) => [p!.id, p!]),
+        );
+        const ctx = { meId: me.id, me, friendIds };
+        return sortHomeFeedPosts(posts, (p) =>
+          scoreHomeFeedPost(p, byId.get(p.authorId), ctx),
+        );
+      };
+
+      if (!allowDemoSeedMerge()) {
+        return (await rankLive(live)).slice(0, limit);
+      }
 
       // Hybrid: keep RPC relevance order for live posts; only top-up with demo
       // after re-ranking the combined set with the same formula.
@@ -1528,27 +1552,7 @@ export const chatRepo = {
       const seen = new Set(live.map((p) => p.id));
       const merged = [...live, ...demo.filter((p) => !seen.has(p.id))];
       try {
-        const me = await this.getMe();
-        const friendIds = new Set(await this.getFriendIds());
-        const authors = await Promise.all(
-          [...new Set(merged.map((p) => p.authorId))].map((id) =>
-            this.getProfile(id),
-          ),
-        );
-        const byId = new Map(
-          authors.filter(Boolean).map((p) => [p!.id, p!]),
-        );
-        const { scoreHomeFeedPost, sortHomeFeedPosts } = await import(
-          '../feed/homeFeedRank'
-        );
-        const ctx = {
-          meId: me.id,
-          me,
-          friendIds,
-        };
-        return sortHomeFeedPosts(merged, (p) =>
-          scoreHomeFeedPost(p, byId.get(p.authorId), ctx),
-        ).slice(0, limit);
+        return (await rankLive(merged)).slice(0, limit);
       } catch {
         return merged
           .sort(
@@ -1625,6 +1629,7 @@ export const chatRepo = {
           'Could not share your post. Check your connection and try again.',
       );
     }
+    notifyChatListeners();
     demoChat.notify();
     return mapFeedPostRow(data);
   },
@@ -2404,16 +2409,9 @@ export const chatRepo = {
     const filteredHits = liveHits.filter((p) => !blockedSet.has(p.id));
 
     if (!allowDemoSeedMerge()) {
-      const friendFlags = await Promise.all(
-        filteredHits.map((p) => this.isFriend(p.id)),
+      return filteredHits.sort((a, b) =>
+        a.fullName.localeCompare(b.fullName),
       );
-      return filteredHits
-        .map((p, i) => ({ p, f: friendFlags[i] }))
-        .sort(
-          (a, b) =>
-            Number(b.f) - Number(a.f) || a.p.fullName.localeCompare(b.p.fullName),
-        )
-        .map((x) => x.p);
     }
 
     const demoHits = await demoChat.searchUsers(query);
@@ -2425,18 +2423,7 @@ export const chatRepo = {
         seen.add(p.id);
       }
     }
-    const friendFlags = await Promise.all(
-      merged.map(async (p) => {
-        if (!isUuid(p.id)) return demoChat.isFriend(p.id);
-        return this.isFriend(p.id);
-      }),
-    );
-    return merged
-      .map((p, i) => ({ p, f: friendFlags[i] }))
-      .sort(
-        (a, b) => Number(b.f) - Number(a.f) || a.p.fullName.localeCompare(b.p.fullName),
-      )
-      .map((x) => x.p);
+    return merged.sort((a, b) => a.fullName.localeCompare(b.fullName));
   },
 
   async listDmThreads(): Promise<DmThread[]> {

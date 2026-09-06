@@ -191,14 +191,19 @@ function SlotImage({
   }
 
   return (
-    <View style={[styles.imgWrap, { width: sw, height: sh }]}>
+    <View style={[styles.imgWrap, { width: sw, height: sh, overflow: 'hidden' }]}>
       <Image
         source={feedImageSource(photo as any)}
-        style={{
-          width: imgW,
-          height: imgH,
-          transform: [{ translateX: tx }, { translateY: ty }],
-        }}
+        style={
+          // Default crop: fill the slot edge-to-edge (avoids letterbox gaps).
+          scale <= 1.001 && Math.abs(ox) < 0.001 && Math.abs(oy) < 0.001
+            ? { width: sw, height: sh }
+            : {
+                width: imgW,
+                height: imgH,
+                transform: [{ translateX: tx }, { translateY: ty }],
+              }
+        }
         resizeMode="cover"
       />
     </View>

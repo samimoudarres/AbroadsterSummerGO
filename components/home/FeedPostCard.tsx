@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -16,7 +16,7 @@ import {
 import { colors, fonts } from '../../constants/theme';
 import type { ChatProfile, FeedPost } from '../../data/chatTypes';
 import { feedImageSource } from '../../lib/feed/feedPhotos';
-import { getImageAspectSync } from '../../lib/feed/imageAspect';
+import { getImageAspect, getImageAspectSync } from '../../lib/feed/imageAspect';
 import { formatPostDate, timeAgo } from '../../lib/feed/timeAgo';
 import type { CollageLayoutId } from '../../lib/feed/collageLayouts';
 import { DEFAULT_CROP, layoutById } from '../../lib/feed/collageLayouts';
@@ -31,8 +31,9 @@ import { CollageCanvas } from './create/CollageCanvas';
 import { Ionicons } from '@expo/vector-icons';
 
 const SCREEN_H = Dimensions.get('window').height;
-/** Cap single-photo / carousel media at ~half the screen so posts aren't wall-tall. */
-const MEDIA_H = Math.min(Math.round(SCREEN_H * 0.45), 380);
+/** Cap single-photo / carousel media so posts aren't wall-tall. */
+const MEDIA_H_MAX = Math.min(Math.round(SCREEN_H * 0.52), 440);
+const MEDIA_H_MIN = 220;
 
 interface FeedPostCardProps {
   post: FeedPost;
@@ -67,14 +68,38 @@ export function FeedPostCard({
   onEditPost,
   onDeletePost,
 }: FeedPostCardProps) {
+  const photos = post.photoUrls?.length ? post.photoUrls : [];
   const [index, setIndex] = useState(0);
   const [burstKey, setBurstKey] = useState(0);
-  const [burstAt, setBurstAt] = useState({ x: 120, y: MEDIA_H / 2 });
+  const [burstAt, setBurstAt] = useState({ x: 120, y: MEDIA_H_MAX / 2 });
   /** Actual card width (PhoneShell is 402 — not window width on desktop web). */
   const [pageW, setPageW] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [firstAspect, setFirstAspect] = useState(() => {
+    const uri = photos[0];
+    if (uri == null) return 1;
+    const sync = getImageAspectSync(uri);
+    return sync > 0 ? sync : 1;
+  });
   const lastTap = useRef(0);
-  const photos = post.photoUrls?.length ? post.photoUrls : [];
+  const isCollage =
+    post.displayMode === 'collage' && Boolean(post.collageLayoutId);
+
+  useEffect(() => {
+    const uri = photos[0];
+    if (uri == null || isCollage) return;
+    let cancelled = false;
+    const sync = getImageAspectSync(uri);
+    if (sync > 0 && sync !== 1) setFirstAspect(sync);
+    void getImageAspect(uri).then((a) => {
+      if (cancelled || !(a > 0)) return;
+      setFirstAspect(a);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photos[0], post.id, isCollage]);
 
   const reportPost = async (reason: string) => {
     try {
@@ -93,22 +118,23 @@ export function FeedPostCard({
       Alert.alert('Could not report', e?.message || 'Try again.');
     }
   };
-  const isCollage =
-    post.displayMode === 'collage' && Boolean(post.collageLayoutId);
   const collageLayout = isCollage
     ? layoutById(post.collageLayoutId)
     : null;
-  const firstAspect =
-    !isCollage && photos[0] != null ? getImageAspectSync(photos[0]) : 1;
   const slideW = pageW > 0 ? pageW : 0;
-  // Collages must keep the same canvas aspect as create/edit (width / layout.aspect).
-  // Carousel / single photos still use native image aspect, capped by MEDIA_H.
+  // Collages keep layout aspect. Carousel matches first photo, then crops others to fill.
   const mediaH =
     isCollage && collageLayout && slideW > 0
       ? Math.round(slideW / collageLayout.aspect)
       : slideW > 0
-        ? Math.min(MEDIA_H, Math.max(200, Math.round(slideW / firstAspect)))
-        : MEDIA_H;
+        ? Math.min(
+            MEDIA_H_MAX,
+            Math.max(
+              MEDIA_H_MIN,
+              Math.round(slideW / Math.max(0.55, Math.min(1.91, firstAspect))),
+            ),
+          )
+        : MEDIA_H_MAX;
 
   // Instagram-style: named lead + (stampCount - 1) others (includes you when stamped)
   const stampLine = useMemo(() => {
@@ -364,13 +390,19 @@ export function FeedPostCard({
               style={{ width: slideW, height: mediaH }}
               contentContainerStyle={{
                 width: slideW * Math.max(photos.length, 1),
+                height: mediaH,
               }}
             >
               {photos.map((uri, i) => (
                 <Pressable
                   key={`${post.id}-${i}`}
                   onPress={onPhotoPress}
-                  style={{ width: slideW, height: mediaH, overflow: 'hidden' }}
+                  style={{
+                    width: slideW,
+                    height: mediaH,
+                    overflow: 'hidden',
+                    backgroundColor: '#000',
+                  }}
                 >
                   <CollageCanvas
                     layoutId="single"
@@ -379,6 +411,7 @@ export function FeedPostCard({
                     width={slideW}
                     height={mediaH}
                     showPlaceholders={false}
+                    style={{ backgroundColor: '#000' }}
                   />
                 </Pressable>
               ))}
@@ -417,7 +450,7 @@ export function FeedPostCard({
             onPress={() => {
               setBurstAt({
                 x: (pageW || 200) * 0.35,
-                y: MEDIA_H * 0.55,
+                y: MEDIA_H_MAX * 0.55,
               });
               setBurstKey((k) => k + 1);
               onToggleStamp(post);
@@ -562,7 +595,7 @@ const styles = StyleSheet.create({
   menuDanger: { color: '#C0392B' },
   media: {
     width: '100%',
-    backgroundColor: '#111',
+    backgroundColor: '#000',
     overflow: 'hidden',
   },
   countPill: {

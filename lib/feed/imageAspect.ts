@@ -6,6 +6,18 @@ function cacheKey(uri: string | number): string {
   return typeof uri === 'number' ? `n:${uri}` : `s:${uri}`;
 }
 
+/** Seed the aspect cache from known gallery dimensions (avoids square fallback). */
+export function primeImageAspect(
+  uri: string | number,
+  width?: number,
+  height?: number,
+): number | null {
+  if (!(width && height && width > 0 && height > 0)) return null;
+  const a = width / height;
+  cache.set(cacheKey(uri), a);
+  return a;
+}
+
 /**
  * Resolve width/height aspect (w/h) for a gallery asset.
  * Falls back to 1 (square) if unknown.

@@ -29,12 +29,33 @@ import {
   type PhotoCrop,
 } from '../../lib/feed/collageLayouts';
 import { feedImageSource } from '../../lib/feed/feedPhotos';
-import { getImageAspectSync } from '../../lib/feed/imageAspect';
+import { getImageAspect, getImageAspectSync, primeImageAspect } from '../../lib/feed/imageAspect';
 import {
   loadGalleryAssets,
   pickExtraFromLibrary,
   type GalleryAsset,
 } from '../../lib/feed/galleryAssets';
+
+function primeGalleryAspects(assets: GalleryAsset[]) {
+  for (const a of assets) {
+    primeImageAspect(a.uri, a.width, a.height);
+  }
+}
+
+/** Natural width/height ratio; portrait stays portrait (no square clamp). */
+function aspectFromAsset(asset?: GalleryAsset | null): number | null {
+  if (!asset) return null;
+  if (asset.width && asset.height && asset.width > 0 && asset.height > 0) {
+    return asset.width / asset.height;
+  }
+  const synced = getImageAspectSync(asset.uri);
+  return synced > 0 ? synced : null;
+}
+
+function clampCarouselAspect(a: number): number {
+  // Allow tall phone photos (~9:16) through wide landscape (~16:9)
+  return Math.max(0.48, Math.min(1.91, a));
+}
 import {
   clearCreatePostDraft,
   getCreatePostDraft,
@@ -127,6 +148,7 @@ export function CreatePostScreen({
     (async () => {
       await initChat();
       const assets = await loadGalleryAssets();
+      primeGalleryAspects(assets);
       // Never wipe photos the user already added from their library
       setGallery((prev) => {
         const picked = [
@@ -269,15 +291,45 @@ export function CreatePostScreen({
   const maxPhotos =
     mode === 'collage' ? slotCount(layoutId) : CAROUSEL_MAX;
 
-  const selectedPhotos = useMemo(() => {
+  const selectedAssets = useMemo(() => {
     return selectedIds
       .map(
         (id) =>
-          gallery.find((g) => g.id === id)?.uri ??
-          libraryAssets.find((g) => g.id === id)?.uri,
+          gallery.find((g) => g.id === id) ??
+          libraryAssets.find((g) => g.id === id),
       )
-      .filter((u) => u != null) as Array<string | number>;
+      .filter(Boolean) as GalleryAsset[];
   }, [selectedIds, gallery, libraryAssets]);
+
+  const selectedPhotos = useMemo(() => {
+    for (const a of selectedAssets) {
+      primeImageAspect(a.uri, a.width, a.height);
+    }
+    return selectedAssets.map((a) => a.uri);
+  }, [selectedAssets]);
+
+  const [carouselAspect, setCarouselAspect] = useState(0.75);
+  const [pickerWidth, setPickerWidth] = useState(
+    Math.min(SCREEN_W, 420),
+  );
+
+  useEffect(() => {
+    const first = selectedAssets[0];
+    if (!first) {
+      setCarouselAspect(0.75);
+      return;
+    }
+    const fromMeta = aspectFromAsset(first);
+    if (fromMeta) setCarouselAspect(clampCarouselAspect(fromMeta));
+    let cancelled = false;
+    void getImageAspect(first.uri).then((a) => {
+      if (cancelled || !(a > 0)) return;
+      setCarouselAspect(clampCarouselAspect(a));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAssets[0]?.id, selectedAssets[0]?.uri]);
 
   // Keep crops aligned with selection length
   useEffect(() => {
@@ -307,6 +359,7 @@ export function CreatePostScreen({
   const addFromLibrary = async () => {
     const room = Math.max(1, maxPhotos - selectedIds.length);
     const extra = await pickExtraFromLibrary(room);
+    primeGalleryAspects(extra);
     if (!extra.length) return;
     setLibraryAssets((prev) => mergeGalleryWithLibrary(prev, extra));
     setGallery((g) => mergeGalleryWithLibrary(g, extra));
@@ -407,7 +460,7 @@ export function CreatePostScreen({
     }
   };
 
-  const previewW = Math.min(SCREEN_W - 32, 360);
+  const previewW = Math.max(280, Math.min(pickerWidth, 420));
 
   const headerTitle = isEditing
     ? step === 'edit'
@@ -435,7 +488,13 @@ export function CreatePostScreen({
 
   return (
     <SwipeBackScreen onClose={onClose}>
-    <View style={[styles.root, { paddingTop: topPad }]}>
+    <View
+      style={[styles.root, { paddingTop: topPad }]}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0) setPickerWidth(w);
+      }}
+    >
       <View style={styles.header}>
         <Pressable
           onPress={() => {
@@ -577,12 +636,9 @@ export function CreatePostScreen({
               <View style={[styles.carouselPreview, { marginHorizontal: 0 }]}>
                 {selectedPhotos.length ? (
                   (() => {
-                    const frameAspect = Math.max(
-                      0.75,
-                      Math.min(1.35, getImageAspectSync(selectedPhotos[0])),
-                    );
-                    const w = Math.min(previewW, SCREEN_W);
-                    const h = Math.min(220, w / frameAspect);
+                    const frameAspect = carouselAspect;
+                    const w = pickerWidth > 0 ? pickerWidth : previewW;
+                    const h = Math.min(w / frameAspect, w * 1.75);
                     return (
                       <ScrollView
                         horizontal
@@ -592,7 +648,7 @@ export function CreatePostScreen({
                         snapToAlignment="start"
                         disableIntervalMomentum
                         showsHorizontalScrollIndicator={false}
-                        style={{ width: w, height: h, alignSelf: 'center' }}
+                        style={{ width: w, height: h, alignSelf: 'stretch' }}
                       >
                         {selectedPhotos.map((uri, i) => (
                           <View
@@ -601,12 +657,12 @@ export function CreatePostScreen({
                               width: w,
                               height: h,
                               overflow: 'hidden',
-                              backgroundColor: '#111',
+                              backgroundColor: '#000',
                             }}
                           >
                             <Image
                               source={feedImageSource(uri as any)}
-                              style={{ width: w, height: h }}
+                              style={StyleSheet.absoluteFill}
                               resizeMode="cover"
                             />
                             {selectedPhotos.length > 1 ? (
@@ -716,6 +772,7 @@ export function CreatePostScreen({
             dragFrom={dragFrom}
             setDragFrom={setDragFrom}
             width={previewW}
+            frameAspect={carouselAspect}
           />
         )
       ) : null}
@@ -737,17 +794,9 @@ export function CreatePostScreen({
               />
             ) : (
               (() => {
-                const frameAspect = Math.max(
-                  0.75,
-                  Math.min(
-                    1.35,
-                    selectedPhotos[0]
-                      ? getImageAspectSync(selectedPhotos[0])
-                      : 1,
-                  ),
-                );
+                const frameAspect = carouselAspect;
                 const w = previewW;
-                const h = Math.min(360, w / frameAspect);
+                const h = Math.min(w / frameAspect, w * 1.75);
                 return (
                   <View style={{ width: w, alignSelf: 'center' }}>
                     <ScrollView
@@ -767,7 +816,7 @@ export function CreatePostScreen({
                             width: w,
                             height: h,
                             overflow: 'hidden',
-                            backgroundColor: '#111',
+                            backgroundColor: '#000',
                           }}
                         >
                           <CarouselCroppedImage
@@ -1166,7 +1215,7 @@ function CollageEditStep({
   );
 }
 
-/** Carousel crop editor — keeps each photo’s native aspect ratio. */
+/** Carousel crop editor — all slides share the first photo’s aspect frame. */
 function CarouselEditStep({
   photos,
   crops,
@@ -1177,6 +1226,7 @@ function CarouselEditStep({
   dragFrom,
   setDragFrom,
   width,
+  frameAspect,
 }: {
   photos: Array<string | number>;
   crops: PhotoCrop[];
@@ -1187,16 +1237,19 @@ function CarouselEditStep({
   dragFrom: number | null;
   setDragFrom: (n: number | null) => void;
   width: number;
+  frameAspect: number;
 }) {
   const idx = editSlot ?? 0;
   const uri = photos[idx];
-  const aspect = uri != null ? getImageAspectSync(uri) : 1;
-  const h = Math.min(420, Math.max(180, width / aspect));
+  const h = Math.min(
+    Math.max(180, width / Math.max(0.48, frameAspect)),
+    width * 1.75,
+  );
 
   return (
     <ScrollView contentContainerStyle={styles.editBody}>
       <Text style={styles.editHint}>
-        Photos keep their original shape · Drag to reposition · Pinch to zoom
+        Cropped to your first photo’s shape · Drag to reposition · Pinch to zoom
       </Text>
       <View style={{ alignItems: 'center' }}>
         {uri != null ? (

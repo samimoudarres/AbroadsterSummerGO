@@ -158,7 +158,7 @@ export function TaggedTripSheet({
                 <Ionicons name="airplane" size={16} color={colors.white} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.eyebrow}>Tagged trip</Text>
+                <Text style={styles.eyebrow}>Trip</Text>
                 <Text style={styles.title} numberOfLines={2}>
                   {trip.destinationCity}
                   {trip.destinationCountry ? `, ${trip.destinationCountry}` : ''}
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '82%',
+    maxHeight: '88%',
     paddingBottom: 20,
   },
   handle: {

@@ -388,7 +388,7 @@ export function AppShell() {
                 void openProfileById(user.id);
               }}
               onCreateTrip={() => setShowCreateTrip(true)}
-              onOpenTrip={(tripId) => setAlbumTripId(tripId)}
+              onOpenTrip={(tripId) => setTaggedTripId(tripId)}
             />
           </Suspense>
         </View>

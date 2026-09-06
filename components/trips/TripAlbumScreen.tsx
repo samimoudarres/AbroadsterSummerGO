@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Asset, requestPermissionsAsync } from 'expo-media-library';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '../../constants/theme';
@@ -25,7 +24,10 @@ import { chatRepo, initChat, isOwnSender, isTripParticipant, subscribeChat } fro
 import { copyText } from '../../lib/clipboard';
 import { demoChat } from '../../lib/chat/demoStore';
 import { confirmChoice } from '../../lib/confirm';
-import { pickExtraFromLibrary } from '../../lib/feed/galleryAssets';
+import {
+  pickExtraFromLibrary,
+  saveUriToLibrary,
+} from '../../lib/feed/galleryAssets';
 import { SwipeBackScreen, useEdgeSwipeBack } from '../../lib/gestures/useEdgeSwipeBack';
 import { shortCalendarRange } from '../../lib/trips/dates';
 import { buildTripInviteShareMessage } from '../../lib/trips/inviteLinks';
@@ -461,25 +463,36 @@ export function TripAlbumScreen({
 
   const saveSelectedPhotos = async () => {
     if (selectedIds.size === 0) return;
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        'Not available',
+        'Saving album photos to the library works in the iOS/Android app.',
+      );
+      return;
+    }
     setSavingPhotos(true);
     try {
-      const perm = await requestPermissionsAsync(true);
-      if (!perm.granted) {
-        Alert.alert(
-          'Permission needed',
-          'Allow photo library access to save album photos.',
-        );
-        return;
-      }
       const chosen = photos.filter((p) => selectedIds.has(p.id));
       let saved = 0;
+      let denied = false;
       for (const ph of chosen) {
         const url = typeof ph.imageUrl === 'string' ? ph.imageUrl : '';
         if (!url) continue;
         const target = `${FileSystem.cacheDirectory}album-${ph.id}.jpg`;
         const dl = await FileSystem.downloadAsync(url, target);
-        await Asset.create(dl.uri);
+        const ok = await saveUriToLibrary(dl.uri);
+        if (!ok) {
+          denied = true;
+          break;
+        }
         saved += 1;
+      }
+      if (denied && saved === 0) {
+        Alert.alert(
+          'Permission needed',
+          'Allow photo library access to save album photos.',
+        );
+        return;
       }
       Alert.alert(
         'Saved',

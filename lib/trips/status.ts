@@ -11,15 +11,18 @@ function startOfLocalDay(d: Date): Date {
 }
 
 /** Effective lifecycle for UI: past wins when dates are over. */
-export function getTripDisplayStatus(
-  trip: Pick<ChatTrip, 'status' | 'dateStart' | 'dateEnd'>,
-): TripDisplayStatus {
+export function getTripDisplayStatus(trip: {
+  status?: string | null;
+  dateStart?: string | null;
+  dateEnd?: string | null;
+}): TripDisplayStatus {
   const end = parseISODate(trip.dateEnd) ?? parseISODate(trip.dateStart);
   if (end) {
     const today = startOfLocalDay(new Date());
     const endDay = startOfLocalDay(end);
     if (endDay.getTime() < today.getTime()) return 'past';
   }
+  if (trip.status === 'past') return 'past';
   return trip.status === 'upcoming' ? 'upcoming' : 'planning';
 }
 

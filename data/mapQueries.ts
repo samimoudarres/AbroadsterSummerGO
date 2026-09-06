@@ -118,15 +118,25 @@ function matchesDrawerFilters(
   return programOk && uniOk;
 }
 
+function textMatches(hay: string, q: string): boolean {
+  const h = hay.toLowerCase().trim();
+  if (!h || !q) return false;
+  if (h.includes(q)) return true;
+  const compactH = h.replace(/[\s.'-]/g, '');
+  const compactQ = q.replace(/[\s.'-]/g, '');
+  if (compactQ && compactH.includes(compactQ)) return true;
+  return h.split(/[\s.'-]+/).some((t) => t.startsWith(q) || (q.length >= 3 && t.startsWith(q.slice(0, 3))));
+}
+
 function matchesSearch(user: UserProfile, q: string): boolean {
   if (!q) return true;
   return (
-    user.fullName.toLowerCase().includes(q) ||
-    user.firstName.toLowerCase().includes(q) ||
-    user.lastName.toLowerCase().includes(q) ||
-    user.homeUniversity.toLowerCase().includes(q) ||
-    user.studyAbroadProgram.toLowerCase().includes(q) ||
-    user.hostCity.toLowerCase().includes(q)
+    textMatches(user.fullName, q) ||
+    textMatches(user.firstName, q) ||
+    textMatches(user.lastName, q) ||
+    textMatches(user.homeUniversity, q) ||
+    textMatches(user.studyAbroadProgram, q) ||
+    textMatches(user.hostCity, q)
   );
 }
 
@@ -326,8 +336,12 @@ export function computeVisibleMapData(options: {
 
   const allTrips = (() => {
     const tripById = new Map<string, TripPin>();
-    for (const t of trips) tripById.set(t.id, t);
-    for (const t of extraTrips) tripById.set(t.id, t);
+    const normalize = (t: TripPin): TripPin => ({
+      ...t,
+      status: getTripDisplayStatus(t),
+    });
+    for (const t of trips) tripById.set(t.id, normalize(t));
+    for (const t of extraTrips) tripById.set(t.id, normalize(t));
     return [...tripById.values()];
   })();
 

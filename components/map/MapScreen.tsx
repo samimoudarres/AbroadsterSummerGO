@@ -59,6 +59,7 @@ import {
   matchesStudyProgram,
 } from '../../lib/schools/matchSchool';
 import { schoolMapTarget } from '../../lib/schoolMapTarget';
+import { getTripDisplayStatus } from '../../lib/trips/status';
 import { colors, fonts } from '../../constants/theme';
 
 function friendMatchesChip(u: UserProfile, chip: FilterChip): boolean {
@@ -143,7 +144,7 @@ async function chatTripsToPins(feed: ChatTrip[]): Promise<TripPin[]> {
       id: t.id,
       memberIds: t.memberIds,
       members,
-      status: t.status,
+      status: getTripDisplayStatus(t),
       openToJoin: t.openToJoin,
       destinationCity: t.destinationCity,
       destinationCountry: t.destinationCountry,
@@ -559,7 +560,7 @@ export function MapScreen({
     return () => unsub();
   }, []);
 
-  // Unified search: places (cities/countries) + AirMail-style people who can appear on the map
+  // Unified search: local people instantly, then places + remote users
   useEffect(() => {
     const q = searchQuery.trim();
     if (q.length < 2) {
@@ -567,6 +568,35 @@ export function MapScreen({
       setRemotePeople([]);
       return;
     }
+    const qLower = q.toLowerCase();
+
+    // Instant local matches (no network wait)
+    const localHits: UserProfile[] = [];
+    const seenLocal = new Set<string>();
+    const pushLocal = (u: UserProfile | null | undefined) => {
+      if (!u || seenLocal.has(u.id) || u.id === 'user-me' || u.isCurrentUser) return;
+      const nameHit =
+        u.fullName.toLowerCase().includes(qLower) ||
+        u.firstName.toLowerCase().includes(qLower) ||
+        u.lastName.toLowerCase().includes(qLower) ||
+        u.fullName.toLowerCase().replace(/[\s.'-]/g, '').includes(
+          qLower.replace(/[\s.'-]/g, ''),
+        );
+      if (!nameHit) return;
+      const located = resolveMapLocation(u);
+      if (!located) return;
+      seenLocal.add(u.id);
+      localHits.push({
+        ...u,
+        latitude: located.latitude,
+        longitude: located.longitude,
+        locationLabel: located.locationLabel,
+      });
+    };
+    for (const u of friendPeople) pushLocal(u);
+    for (const u of rosterPeople) pushLocal(u);
+    setRemotePeople(localHits);
+
     let cancelled = false;
     const t = setTimeout(async () => {
       try {
@@ -577,11 +607,8 @@ export function MapScreen({
         if (cancelled) return;
         setPlaceHits(places);
 
-        const mapVisible: UserProfile[] = [];
-        const seen = new Set<string>();
-        const { chatProfileToMapUser } = await import(
-          '../../lib/map/chatProfileToMapUser'
-        );
+        const mapVisible: UserProfile[] = [...localHits];
+        const seen = new Set(localHits.map((u) => u.id));
         for (const hit of users) {
           if (seen.has(hit.id) || hit.id === 'user-me') continue;
           const fromRoster = rosterPeople.find((u) => u.id === hit.id);
@@ -614,10 +641,10 @@ export function MapScreen({
       } catch {
         if (!cancelled) {
           setPlaceHits([]);
-          setRemotePeople([]);
+          // keep localHits already shown
         }
       }
-    }, 220);
+    }, 100);
     return () => {
       cancelled = true;
       clearTimeout(t);
@@ -1076,19 +1103,7 @@ export function MapScreen({
     });
   }, []);
 
-  const openTrip = useCallback((trip: TripPin) => {
-    setSearchPin(null);
-    setSelectedTrip(trip);
-    setShowGroupSheet(true);
-    setFlyTo({
-      latitude: trip.latitude,
-      longitude: trip.longitude,
-      zoom: 13.5,
-    });
-  }, []);
-
-  /** Pullout list → full trip page when the trip exists in chat/Supabase. */
-  const openTripFromList = useCallback(
+  const openTrip = useCallback(
     async (trip: TripPin) => {
       setSearchPin(null);
       setFlyTo({
@@ -1111,6 +1126,12 @@ export function MapScreen({
       setShowGroupSheet(true);
     },
     [onOpenTrip],
+  );
+
+  /** Pullout list → full trip page when the trip exists in chat/Supabase. */
+  const openTripFromList = useCallback(
+    (trip: TripPin) => openTrip(trip),
+    [openTrip],
   );
 
   const openProgram = useCallback(

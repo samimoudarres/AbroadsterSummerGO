@@ -257,7 +257,7 @@ export function ChannelSidebar({
                   style={styles.dmRow}
                   onPress={() => onOpenDm(u.id)}
                 >
-                  <Avatar source={u.avatar} size={36} />
+                  <Avatar source={u.avatar} name={u.fullName} size={36} />
                   <Text style={styles.dmName}>{u.fullName}</Text>
                 </Pressable>
               ))
@@ -276,7 +276,7 @@ export function ChannelSidebar({
                     style={styles.dmRow}
                     onPress={() => onOpenDm(u.id)}
                   >
-                    <Avatar source={u.avatar} size={36} />
+                    <Avatar source={u.avatar} name={u.fullName} size={36} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.dmName}>{u.fullName}</Text>
                       {t.lastPreview ? (
