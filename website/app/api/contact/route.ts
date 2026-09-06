@@ -64,6 +64,7 @@ async function notifyOwner(opts: {
     'View tickets in Supabase → Table Editor → contact_tickets.',
   ].join('\n');
 
+  // 1) Resend (preferred) — free tier; sign up with CONTACT_TO so onboarding@resend.dev can deliver
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (apiKey) {
     try {
@@ -80,7 +81,6 @@ async function notifyOwner(opts: {
       });
       if (error) {
         console.error('Resend notify failed', error);
-        // fall through to FormSubmit
       } else {
         return { ok: true, via: 'resend' };
       }
@@ -89,58 +89,46 @@ async function notifyOwner(opts: {
     }
   }
 
-  // Server-side only fallback (visitor never sees the inbox address).
-  // FormSubmit requires a real Origin/Referer; without them cloud hosts get 403.
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'https://abroadster.vercel.app';
-  try {
-    const res = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(to)}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Origin: siteUrl,
-        Referer: `${siteUrl}/contact`,
-      },
-      body: JSON.stringify({
-        name: opts.name,
-        email: opts.email,
-        message: opts.message,
-        source: opts.source,
-        ticket_id: opts.ticketId ?? '',
-        _subject: subject,
-        _replyto: opts.email,
-        _template: 'table',
-        _captcha: 'false',
-      }),
-    });
-    const json = (await res.json().catch(() => ({}))) as {
-      success?: string | boolean;
-      message?: string;
-    };
-    const accepted =
-      res.ok &&
-      (json.success === true ||
-        json.success === 'true' ||
-        // First-time: FormSubmit emails an Activate link to CONTACT_TO
-        /activat/i.test(String(json.message || '')));
-    if (!accepted) {
-      console.error('FormSubmit notify failed', res.status, json);
-      return {
-        ok: false,
-        via: 'formsubmit',
-        detail: json.message || `HTTP ${res.status}`,
+  // 2) Web3Forms — works from Vercel; access key aliases CONTACT_TO (no inbox in client)
+  const web3Key = process.env.WEB3FORMS_ACCESS_KEY?.trim();
+  if (web3Key) {
+    try {
+      const res = await fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          access_key: web3Key,
+          subject,
+          name: opts.name,
+          email: opts.email,
+          message: text,
+          from_name: 'Abroadster Support',
+          replyto: opts.email,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        message?: string;
       };
+      if (res.ok && json.success) {
+        return { ok: true, via: 'web3forms' };
+      }
+      console.error('Web3Forms notify failed', res.status, json);
+    } catch (err) {
+      console.error('Web3Forms notify unexpected', err);
     }
-    return { ok: true, via: 'formsubmit', detail: String(json.message || '') };
-  } catch (err) {
-    console.error('FormSubmit notify unexpected', err);
-    return {
-      ok: false,
-      via: 'formsubmit',
-      detail: err instanceof Error ? err.message : 'unknown',
-    };
   }
+
+  console.error(
+    'Owner notify skipped: set RESEND_API_KEY or WEB3FORMS_ACCESS_KEY on Vercel',
+  );
+  return {
+    ok: false,
+    detail: 'No email provider configured (RESEND_API_KEY or WEB3FORMS_ACCESS_KEY)',
+  };
 }
 
 export async function POST(req: Request) {
