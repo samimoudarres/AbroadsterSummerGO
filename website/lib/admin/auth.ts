@@ -51,5 +51,9 @@ export async function isAdminAuthenticated() {
 }
 
 export function adminAuthConfigured() {
-  return Boolean(adminSecret() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
+  return Boolean(
+    adminSecret() &&
+      (process.env.SUPABASE_SECRET_KEY?.trim() ||
+        process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
+  );
 }
