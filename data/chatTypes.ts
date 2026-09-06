@@ -165,6 +165,8 @@ export interface AlbumPhoto {
   uploaderId: string;
   imageUrl: string | number;
   createdAt: string;
+  likeCount?: number;
+  likedByMe?: boolean;
 }
 
 export interface ChatReaction {

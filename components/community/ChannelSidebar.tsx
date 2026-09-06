@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Keyboard,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -64,6 +66,22 @@ export function ChannelSidebar({
   const [threads, setThreads] = useState<DmThread[]>([]);
   const [profiles, setProfiles] = useState<Record<string, ChatProfile>>({});
   const [tripChannels, setTripChannels] = useState<TripChannel[]>([]);
+  const [keyboardPad, setKeyboardPad] = useState(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardPad(e.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardPad(0),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   useEffect(() => {
     x.value = withTiming(open ? 0 : -DRAWER_WIDTH, { duration: 220 });
@@ -123,9 +141,15 @@ export function ChannelSidebar({
     >
       <Pressable style={styles.backdrop} onPress={onClose} />
       <Animated.View style={[styles.drawer, drawerStyle, { paddingTop: topPad }]}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={0}
+        >
         <ScrollView
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={{ paddingBottom: 40 + keyboardPad }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           <Text style={styles.sectionTitle}>Channels</Text>
           {communities.map((c) => {
@@ -265,6 +289,7 @@ export function ChannelSidebar({
                 );
               })}
         </ScrollView>
+        </KeyboardAvoidingView>
       </Animated.View>
     </View>
   );

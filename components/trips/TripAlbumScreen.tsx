@@ -243,7 +243,7 @@ export function TripAlbumScreen({
   }, [inviteQuery, isMember, trip?.memberIds, trip?.pendingInviteeIds]);
 
   const pickPhotos = async () => {
-    const assets = await pickExtraFromLibrary(20);
+    const assets = await pickExtraFromLibrary(150);
     if (!assets.length) {
       Alert.alert(
         'Photos',

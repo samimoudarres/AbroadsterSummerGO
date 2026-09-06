@@ -84,6 +84,7 @@ export function SwipeBackScreen({
 
 const styles = StyleSheet.create({
   fill: {
-    flex: 1,
+    ...StyleSheet.absoluteFill,
+    zIndex: 200,
   },
 });

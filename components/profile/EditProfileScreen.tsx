@@ -281,15 +281,18 @@ export function EditProfileScreen({
                 placeholderTextColor={colors.textMuted}
               />
 
-              <Text style={styles.label}>Abroad program</Text>
+              <Text style={styles.label}>Abroad school / program</Text>
               <SchoolPicker
                 value={abroadProgram}
-                mode="programs"
-                placeholder="Search program…"
+                mode="all"
+                placeholder="Search program or local university…"
                 onSelect={(r) => {
                   if (r.kind === 'program') {
                     setAbroadProgram(r.item.name);
                     if (r.item.city) setHostCity(r.item.city);
+                    if (r.item.country) setHostCountry(r.item.country);
+                  } else if (r.kind === 'institution') {
+                    setAbroadProgram(r.item.name);
                     if (r.item.country) setHostCountry(r.item.country);
                   }
                 }}

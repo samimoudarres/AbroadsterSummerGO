@@ -1954,8 +1954,33 @@ export const chatRepo = {
         uploaderId: p.uploader_id,
         imageUrl: p.image_url,
         createdAt: p.created_at,
+        likeCount: 0,
+        likedByMe: false,
       }));
       if (!live.length) return demo;
+
+      try {
+        const me = await this.getMe();
+        const ids = live.map((p) => p.id);
+        const { data: likes } = await supabase!
+          .from('album_photo_likes')
+          .select('photo_id, user_id')
+          .in('photo_id', ids);
+        const countBy = new Map<string, number>();
+        const likedMine = new Set<string>();
+        for (const row of likes ?? []) {
+          const pid = (row as any).photo_id as string;
+          countBy.set(pid, (countBy.get(pid) ?? 0) + 1);
+          if ((row as any).user_id === me.id) likedMine.add(pid);
+        }
+        for (const p of live) {
+          p.likeCount = countBy.get(p.id) ?? 0;
+          p.likedByMe = likedMine.has(p.id);
+        }
+      } catch {
+        // likes table may not exist yet
+      }
+
       // Prefer live rows; never pad with demo photos that share the same URL
       const seenIds = new Set(live.map((p) => p.id));
       const seenUrls = new Set(live.map((p) => p.imageUrl));
@@ -1966,6 +1991,21 @@ export const chatRepo = {
     } catch {
       return demo;
     }
+  },
+
+  async toggleAlbumPhotoLike(
+    photoId: string,
+  ): Promise<{ liked: boolean; likeCount: number }> {
+    if (!(await useLive()) || !isUuid(photoId) || !supabase) {
+      return { liked: false, likeCount: 0 };
+    }
+    const { data, error } = await supabase.rpc('toggle_album_photo_like', {
+      p_photo_id: photoId,
+    });
+    if (error) throw error;
+    const liked = Boolean((data as any)?.liked);
+    const likeCount = Number((data as any)?.like_count ?? 0);
+    return { liked, likeCount };
   },
 
   async uploadTripAlbumPhotos(

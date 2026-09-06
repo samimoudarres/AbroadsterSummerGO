@@ -1,6 +1,11 @@
 import type { ProgramPin, TripPin, UserProfile } from '../../data/types';
 
-export type ClusterGlowKind = 'person' | 'upcoming' | 'planning' | 'program';
+export type ClusterGlowKind =
+  | 'person'
+  | 'upcoming'
+  | 'planning'
+  | 'past'
+  | 'program';
 
 export type MapClusterMember =
   | { kind: 'person'; person: UserProfile }
@@ -36,8 +41,9 @@ function cellSizeDegrees(zoom: number): number {
 function memberPriority(m: MapClusterMember): number {
   if (m.kind === 'person') return 0;
   if (m.kind === 'trip' && m.trip.status === 'upcoming') return 1;
-  if (m.kind === 'trip') return 2;
-  return 3;
+  if (m.kind === 'trip' && m.trip.status === 'planning') return 2;
+  if (m.kind === 'trip') return 3;
+  return 4;
 }
 
 function sortMembers(members: MapClusterMember[]): MapClusterMember[] {
@@ -50,7 +56,9 @@ function glowFor(members: MapClusterMember[]): ClusterGlowKind {
   if (!top) return 'person';
   if (top.kind === 'person') return 'person';
   if (top.kind === 'trip') {
-    return top.trip.status === 'upcoming' ? 'upcoming' : 'planning';
+    if (top.trip.status === 'upcoming') return 'upcoming';
+    if (top.trip.status === 'past') return 'past';
+    return 'planning';
   }
   return 'program';
 }

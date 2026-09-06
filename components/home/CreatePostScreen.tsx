@@ -91,6 +91,7 @@ export function CreatePostScreen({
   const [editSlot, setEditSlot] = useState<number | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [editReady, setEditReady] = useState(!isEditing);
+  const [galleryExpanded, setGalleryExpanded] = useState(false);
 
   const [caption, setCaption] = useState(saved?.caption ?? '');
   const [taggedTripId, setTaggedTripId] = useState<string | null>(
@@ -515,6 +516,7 @@ export function CreatePostScreen({
           </View>
 
           {/* Top: collage layouts + live fill preview */}
+          {!galleryExpanded ? (
           <View style={styles.topHalf}>
             {mode === 'collage' ? (
               <>
@@ -572,29 +574,35 @@ export function CreatePostScreen({
                 </View>
               </>
             ) : (
-              <View style={styles.carouselPreview}>
+              <View style={[styles.carouselPreview, { marginHorizontal: 0 }]}>
                 {selectedPhotos.length ? (
                   (() => {
                     const frameAspect = Math.max(
                       0.75,
                       Math.min(1.35, getImageAspectSync(selectedPhotos[0])),
                     );
-                    const w = Math.min(previewW, SCREEN_W - 32);
-                    const h = Math.min(320, w / frameAspect);
+                    const w = Math.min(previewW, SCREEN_W);
+                    const h = Math.min(220, w / frameAspect);
                     return (
                       <ScrollView
                         horizontal
                         pagingEnabled
+                        decelerationRate="fast"
+                        snapToInterval={w}
+                        snapToAlignment="start"
+                        disableIntervalMomentum
                         showsHorizontalScrollIndicator={false}
-                        style={{ height: h }}
+                        style={{ width: w, height: h, alignSelf: 'center' }}
                       >
                         {selectedPhotos.map((uri, i) => (
                           <View
                             key={`cprev-${i}`}
-                            style={[
-                              styles.carouselSlide,
-                              { width: w, height: h },
-                            ]}
+                            style={{
+                              width: w,
+                              height: h,
+                              overflow: 'hidden',
+                              backgroundColor: '#111',
+                            }}
                           >
                             <Image
                               source={feedImageSource(uri as any)}
@@ -628,8 +636,19 @@ export function CreatePostScreen({
               </View>
             )}
           </View>
+          ) : null}
 
           {/* Gallery */}
+          <Pressable
+            style={styles.galleryHandle}
+            onPress={() => setGalleryExpanded((v) => !v)}
+            hitSlop={8}
+          >
+            <View style={styles.galleryHandleBar} />
+            <Text style={styles.galleryHandleText}>
+              {galleryExpanded ? 'Show preview' : 'Pull up for more photos'}
+            </Text>
+          </Pressable>
           <View style={styles.galleryHeader}>
             <Text style={styles.galleryTitle}>Recents</Text>
             <Pressable onPress={() => void addFromLibrary()}>
@@ -640,7 +659,8 @@ export function CreatePostScreen({
             data={gallery}
             keyExtractor={(a) => a.id}
             numColumns={4}
-            style={styles.gallery}
+            style={[styles.gallery, galleryExpanded && styles.galleryExpanded]}
+            contentContainerStyle={{ paddingBottom: 24 }}
             renderItem={({ item, index }) => {
               const selIdx = selectedIds.indexOf(item.id);
               const selected = selIdx >= 0;
@@ -729,26 +749,37 @@ export function CreatePostScreen({
                 const w = previewW;
                 const h = Math.min(360, w / frameAspect);
                 return (
-                  <ScrollView horizontal pagingEnabled style={{ height: h }}>
-                    {selectedPhotos.map((uri, i) => (
-                      <View
-                        key={`d-${i}`}
-                        style={{
-                          width: w,
-                          height: h,
-                          overflow: 'hidden',
-                          backgroundColor: '#111',
-                        }}
-                      >
-                        <CarouselCroppedImage
-                          uri={uri}
-                          crop={crops[i] ?? DEFAULT_CROP}
-                          width={w}
-                          height={h}
-                        />
-                      </View>
-                    ))}
-                  </ScrollView>
+                  <View style={{ width: w, alignSelf: 'center' }}>
+                    <ScrollView
+                      horizontal
+                      pagingEnabled
+                      decelerationRate="fast"
+                      snapToInterval={w}
+                      snapToAlignment="start"
+                      disableIntervalMomentum
+                      showsHorizontalScrollIndicator={false}
+                      style={{ width: w, height: h }}
+                    >
+                      {selectedPhotos.map((uri, i) => (
+                        <View
+                          key={`d-${i}`}
+                          style={{
+                            width: w,
+                            height: h,
+                            overflow: 'hidden',
+                            backgroundColor: '#111',
+                          }}
+                        >
+                          <CarouselCroppedImage
+                            uri={uri}
+                            crop={crops[i] ?? DEFAULT_CROP}
+                            width={w}
+                            height={h}
+                          />
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </View>
                 );
               })()
             )}
@@ -1307,6 +1338,7 @@ const styles = StyleSheet.create({
   },
   topHalf: {
     paddingBottom: 8,
+    maxHeight: '42%',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.divider,
   },
@@ -1343,8 +1375,7 @@ const styles = StyleSheet.create({
     maxWidth: 84,
   },
   carouselSlide: {
-    marginHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 0,
     overflow: 'hidden',
     backgroundColor: '#111',
     alignItems: 'center',
@@ -1360,8 +1391,8 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   carouselPreview: {
-    marginHorizontal: 16,
-    borderRadius: 12,
+    marginHorizontal: 0,
+    borderRadius: 0,
     overflow: 'hidden',
     backgroundColor: '#111',
   },
@@ -1405,6 +1436,26 @@ const styles = StyleSheet.create({
     color: colors.openJoin,
   },
   gallery: { flex: 1 },
+  galleryExpanded: { flex: 1 },
+  galleryHandle: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
+    backgroundColor: colors.white,
+  },
+  galleryHandleBar: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D0D0D0',
+    marginBottom: 4,
+  },
+  galleryHandleText: {
+    fontFamily: fonts.regular,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
   gridCell: {
     width: '25%',
     aspectRatio: 1,

@@ -102,9 +102,11 @@ export function TripPinView({
 }) {
   const size = 45;
   const glow =
-    trip.status === 'upcoming'
-      ? colors.statusOrangeGlow
-      : colors.statusYellowGlow;
+    trip.status === 'past'
+      ? colors.filterGray
+      : trip.status === 'upcoming'
+        ? colors.statusOrangeGlow
+        : colors.statusYellowGlow;
   const title =
     shortTripTitle(trip.members.map((m) => m.firstName)) ||
     trip.destinationCity;
@@ -243,7 +245,9 @@ export function ClusterPinView({
         ? colors.statusOrangeGlow
         : cluster.glowKind === 'planning'
           ? colors.statusYellowGlow
-          : colors.programBlue;
+          : cluster.glowKind === 'past'
+            ? colors.filterGray
+            : colors.programBlue;
   const faces = cluster.faceSources.slice(0, 4);
   const [uris, setUris] = useState<string[]>([]);
 

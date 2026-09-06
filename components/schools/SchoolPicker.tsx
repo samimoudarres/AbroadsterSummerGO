@@ -76,7 +76,13 @@ export function SchoolPicker({
       if (!rows.length) rows = searchInstitutionsLocal(q, 16);
       if (usOnly) rows = rows.filter(isUsInstitution);
       if (!cancelled) {
-        setInstitutions(rows);
+        // Prefer local universities abroad (EU/AU/etc.) over US when browsing abroad schools
+        const sorted = [...rows].sort((a, b) => {
+          const aUs = isUsInstitution(a) ? 1 : 0;
+          const bUs = isUsInstitution(b) ? 1 : 0;
+          return aUs - bUs;
+        });
+        setInstitutions(sorted);
         setLoading(false);
       }
     }, 160);

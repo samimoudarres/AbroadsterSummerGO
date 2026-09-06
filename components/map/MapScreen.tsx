@@ -579,16 +579,26 @@ export function MapScreen({
 
         const mapVisible: UserProfile[] = [];
         const seen = new Set<string>();
+        const { chatProfileToMapUser } = await import(
+          '../../lib/map/chatProfileToMapUser'
+        );
         for (const hit of users) {
           if (seen.has(hit.id) || hit.id === 'user-me') continue;
+          const fromRoster = rosterPeople.find((u) => u.id === hit.id);
+          const fromFriends = friendPeople.find((u) => u.id === hit.id);
           const local =
+            fromRoster ??
+            fromFriends ??
             getUserById(hit.id) ??
             allUsers.find(
               (u) =>
                 u.fullName.toLowerCase() === hit.fullName.toLowerCase() ||
                 (u.firstName.toLowerCase() === hit.firstName.toLowerCase() &&
                   u.lastName.toLowerCase() === hit.lastName.toLowerCase()),
-            );
+            ) ??
+            chatProfileToMapUser(hit, {
+              isFriend: (mutualFriendIds ?? friendIds ?? []).includes(hit.id),
+            });
           if (!local) continue;
           const located = resolveMapLocation(local);
           if (!located) continue;
@@ -612,7 +622,7 @@ export function MapScreen({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [searchQuery]);
+  }, [searchQuery, rosterPeople, friendPeople, friendIds, mutualFriendIds]);
 
   // Clear place pin when search is cleared
   useEffect(() => {
@@ -1158,20 +1168,19 @@ export function MapScreen({
   }, []);
 
   const listItems = useMemo((): MapListItem[] => {
-    const placeItems: MapListPlaceItem[] = placeHits.map((p) => ({
-      kind: 'place',
-      id: `place-${p.id}`,
-      placeName: p.placeName,
-      cityName: p.cityName,
-      countryName: p.countryName,
-      latitude: p.latitude,
-      longitude: p.longitude,
-    }));
-
     const base = visible.listItems;
     // School filter: trust the cohort list only — don't append unrelated search hits
     if (selectedFilters.length > 0) {
-      return [...base.filter((i) => i.kind === 'person'), ...placeItems];
+      const schoolPlaces: MapListPlaceItem[] = placeHits.map((p) => ({
+        kind: 'place',
+        id: `place-${p.id}`,
+        placeName: p.placeName,
+        cityName: p.cityName,
+        countryName: p.countryName,
+        latitude: p.latitude,
+        longitude: p.longitude,
+      }));
+      return [...base.filter((i) => i.kind === 'person'), ...schoolPlaces];
     }
 
     const seenPeople = new Set(
@@ -1191,6 +1200,19 @@ export function MapScreen({
         newPosts: user.newPosts,
       });
     }
+
+    // Prefer people matches; trim place noise when people are found
+    const placeSource =
+      remotePeople.length > 0 ? placeHits.slice(0, 3) : placeHits;
+    const placeItems: MapListPlaceItem[] = placeSource.map((p) => ({
+      kind: 'place',
+      id: `place-${p.id}`,
+      placeName: p.placeName,
+      cityName: p.cityName,
+      countryName: p.countryName,
+      latitude: p.latitude,
+      longitude: p.longitude,
+    }));
 
     // People → Places → (schools/trips already in base after people)
     const peopleFirst = [

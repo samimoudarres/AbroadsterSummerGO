@@ -76,6 +76,7 @@ async function waitForSize(el: HTMLElement): Promise<void> {
 function glowForKind(kind: ClusterGlowKind): string {
   if (kind === 'upcoming') return colors.statusOrangeGlow;
   if (kind === 'planning') return colors.statusYellowGlow;
+  if (kind === 'past') return colors.filterGray;
   if (kind === 'program') return colors.programBlue;
   return colors.statusGreenGlow;
 }
@@ -293,9 +294,11 @@ export default function AbroadsterMap({
           } else if (m.kind === 'trip') {
             const trip = m.trip;
             const glow =
-              trip.status === 'upcoming'
-                ? colors.statusOrangeGlow
-                : colors.statusYellowGlow;
+              trip.status === 'past'
+                ? colors.filterGray
+                : trip.status === 'upcoming'
+                  ? colors.statusOrangeGlow
+                  : colors.statusYellowGlow;
             const avatarUris = await Promise.all(
               trip.members.map((mem) => ensureImageUri(mem.avatar)),
             );

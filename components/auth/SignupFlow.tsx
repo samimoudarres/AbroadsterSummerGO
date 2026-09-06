@@ -196,7 +196,7 @@ export function SignupFlow({ onBackToWelcome }: SignupFlowProps) {
     }
     if (step === 'abroadProgram') {
       if (!draft.studyAbroadProgram.trim()) {
-        setError('Search and select your study abroad program.');
+        setError('Search and select your study abroad school or program.');
         return;
       }
       setStep('terms');
@@ -548,15 +548,23 @@ export function SignupFlow({ onBackToWelcome }: SignupFlowProps) {
               </View>
             ) : (
               <SchoolPicker
-                mode="programs"
+                mode="all"
                 showMemberCount
                 programsForCount={programsOnApp}
-                placeholder="Search NYU London, CIEE Paris…"
+                placeholder="Search NYU London, Trinity College Dublin, UniMelb…"
                 onSelect={(r) => {
                   if (r.kind === 'program') {
                     patch({
                       studyAbroadProgram: r.item.name,
                       hostCity: r.item.city || '',
+                      hostCountry: r.item.country || '',
+                    });
+                    setError(null);
+                  } else if (r.kind === 'institution') {
+                    // Direct enrollment at a local (EU/AU/etc.) university
+                    patch({
+                      studyAbroadProgram: r.item.name,
+                      hostCity: '',
                       hostCountry: r.item.country || '',
                     });
                     setError(null);

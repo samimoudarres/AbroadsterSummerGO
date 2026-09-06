@@ -195,6 +195,9 @@ export function AlbumPhotoViewer({
   const [index, setIndex] = useState(initialIndex);
   const [zoomed, setZoomed] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [likeState, setLikeState] = useState<
+    Record<string, { liked: boolean; count: number }>
+  >({});
   const [shareTargets, setShareTargets] = useState<
     Array<
       | { kind: 'friend'; profile: ChatProfile }
@@ -205,6 +208,17 @@ export function AlbumPhotoViewer({
 
   const photo = photos[index];
   const uploader = photo ? profiles[photo.uploaderId] : null;
+
+  useEffect(() => {
+    const next: Record<string, { liked: boolean; count: number }> = {};
+    for (const p of photos) {
+      next[p.id] = {
+        liked: Boolean(p.likedByMe),
+        count: p.likeCount ?? 0,
+      };
+    }
+    setLikeState(next);
+  }, [photos]);
 
   useEffect(() => {
     setZoomed(false);
@@ -296,7 +310,9 @@ export function AlbumPhotoViewer({
         data={photos}
         keyExtractor={(p) => p.id}
         scrollEnabled={!zoomed}
-        pagingEnabled={false}
+        pagingEnabled
+        decelerationRate="fast"
+        showsVerticalScrollIndicator={false}
         onLayout={() => {
           if (initialIndex > 0) {
             requestAnimationFrame(() => {
@@ -345,6 +361,41 @@ export function AlbumPhotoViewer({
               />
 
               <View style={styles.actions}>
+                <Pressable
+                  style={styles.shareBtn}
+                  onPress={() => {
+                    void (async () => {
+                      try {
+                        const res = await chatRepo.toggleAlbumPhotoLike(item.id);
+                        setLikeState((prev) => ({
+                          ...prev,
+                          [item.id]: {
+                            liked: res.liked,
+                            count: res.likeCount,
+                          },
+                        }));
+                      } catch {
+                        // table may not exist yet — ignore
+                      }
+                    })();
+                  }}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name={
+                      likeState[item.id]?.liked ? 'heart' : 'heart-outline'
+                    }
+                    size={22}
+                    color={
+                      likeState[item.id]?.liked ? '#E1306C' : colors.black
+                    }
+                  />
+                  <Text style={styles.shareLabel}>
+                    {likeState[item.id]?.count
+                      ? String(likeState[item.id].count)
+                      : 'Like'}
+                  </Text>
+                </Pressable>
                 <Pressable
                   style={styles.shareBtn}
                   onPress={() => setSharing(true)}
