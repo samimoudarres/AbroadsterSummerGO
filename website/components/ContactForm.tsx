@@ -4,7 +4,7 @@ import { FormEvent, useState } from 'react';
 
 type Status = 'idle' | 'loading' | 'ok' | 'err';
 
-export function ContactForm() {
+export function ContactForm({ source = 'website' }: { source?: string }) {
   const [status, setStatus] = useState<Status>('idle');
   const [message, setMessage] = useState('');
 
@@ -24,22 +24,15 @@ export function ContactForm() {
           email: String(data.get('email') || ''),
           message: String(data.get('message') || ''),
           company: String(data.get('company') || ''),
+          source,
         }),
       });
       const json = (await res.json()) as {
         ok?: boolean;
         error?: string;
-        mailto?: string;
       };
 
       if (!res.ok || !json.ok) {
-        if (json.mailto) {
-          window.location.href = json.mailto;
-          setStatus('ok');
-          setMessage('Opening your email app so you can send the message.');
-          form.reset();
-          return;
-        }
         throw new Error(json.error || 'Something went wrong. Please try again.');
       }
 
@@ -51,7 +44,7 @@ export function ContactForm() {
       setMessage(
         err instanceof Error
           ? err.message
-          : 'Couldn’t send right now. Please try again in a minute.'
+          : 'Couldn’t send right now. Please try again in a minute.',
       );
     }
   }

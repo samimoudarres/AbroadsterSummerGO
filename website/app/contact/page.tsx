@@ -19,7 +19,7 @@ export default function ContactPage() {
         </p>
       </Reveal>
       <Reveal className={styles.panel}>
-        <ContactForm />
+        <ContactForm source="contact" />
       </Reveal>
     </div>
   );

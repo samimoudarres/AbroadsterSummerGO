@@ -18,23 +18,28 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Contact form email
+## Contact / support form
 
-Messages are sent to **samimoudarres@hotmail.com**.
+Visitors submit the form on `/contact` or `/support`. The website API:
 
-1. Create a free account at [resend.com](https://resend.com)
-2. Create an API key
-3. Copy `.env.example` → `.env.local` and set:
+1. Saves a row in Supabase `contact_tickets` (service role only — visitors never see your inbox)
+2. Emails **you** a notification via Resend (`CONTACT_TO`)
+
+Required Vercel / `.env.local` vars:
 
 ```bash
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
 RESEND_API_KEY=re_xxxxx
-CONTACT_TO=samimoudarres@hotmail.com
+CONTACT_TO=your-private-inbox@example.com
 CONTACT_FROM=Abroadster <onboarding@resend.dev>
 ```
 
 With Resend’s onboarding sender you can deliver to your own inbox without verifying a domain. After you own a domain, verify it in Resend and change `CONTACT_FROM`.
 
-If `RESEND_API_KEY` is missing, the form falls back to opening a prefilled `mailto:` to the support address.
+There is **no** `mailto:` fallback — your support address stays server-side only.
+
+Run migration `053_contact_tickets.sql` in the Supabase SQL editor before relying on the form in production.
 
 ## Deploy free on Vercel
 

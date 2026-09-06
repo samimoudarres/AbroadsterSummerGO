@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { getSupabaseAdmin } from '@/lib/admin/supabaseAdmin';
 import { SITE } from '@/lib/site';
 
 export const runtime = 'nodejs';
@@ -9,6 +10,7 @@ type Body = {
   email?: string;
   message?: string;
   company?: string;
+  source?: string;
 };
 
 const rate = new Map<string, { count: number; reset: number }>();
@@ -32,30 +34,25 @@ function limited(ip: string) {
   return entry.count > 8;
 }
 
-function mailtoLink(name: string, email: string, message: string) {
-  const subject = encodeURIComponent(`Abroadster contact from ${name}`);
-  const body = encodeURIComponent(
-    `${message}\n\n-\nFrom: ${name} <${email}>`
-  );
-  return `mailto:${SITE.supportEmail}?subject=${subject}&body=${body}`;
-}
-
 export async function POST(req: Request) {
   try {
     const ip = clientIp(req);
     if (limited(ip)) {
       return NextResponse.json(
         { ok: false, error: 'Too many messages. Try again in a minute.' },
-        { status: 429 }
+        { status: 429 },
       );
     }
 
     const body = (await req.json()) as Body;
-    const name = String(body.name || '').trim();
-    const email = String(body.email || '').trim();
-    const message = String(body.message || '').trim();
+    const name = String(body.name || '').trim().slice(0, 120);
+    const email = String(body.email || '').trim().slice(0, 200);
+    const message = String(body.message || '').trim().slice(0, 4000);
     const company = String(body.company || '').trim();
+    const source = String(body.source || 'website').trim().slice(0, 40) || 'website';
+    const userAgent = (req.headers.get('user-agent') || '').slice(0, 400);
 
+    // Honeypot — pretend success so bots leave
     if (company) {
       return NextResponse.json({ ok: true });
     }
@@ -63,56 +60,92 @@ export async function POST(req: Request) {
     if (!name || !email || !message) {
       return NextResponse.json(
         { ok: false, error: 'Please fill in name, email, and message.' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json(
         { ok: false, error: 'That email doesn’t look right.' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const to = process.env.CONTACT_TO || SITE.supportEmail;
-    const apiKey = process.env.RESEND_API_KEY;
+    let ticketId: string | null = null;
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data, error } = await supabase
+        .from('contact_tickets')
+        .insert({
+          name,
+          email,
+          message,
+          source,
+          ip: ip === 'unknown' ? null : ip,
+          user_agent: userAgent || null,
+          status: 'open',
+        })
+        .select('id')
+        .single();
 
-    if (!apiKey) {
-      return NextResponse.json({
-        ok: false,
-        error: 'Email service is still warming up.',
-        mailto: mailtoLink(name, email, message),
-      });
-    }
-
-    const resend = new Resend(apiKey);
-    const from =
-      process.env.CONTACT_FROM || 'Abroadster <onboarding@resend.dev>';
-
-    const { error } = await resend.emails.send({
-      from,
-      to: [to],
-      replyTo: email,
-      subject: `Abroadster contact from ${name}`,
-      text: `From: ${name} <${email}>\n\n${message}`,
-    });
-
-    if (error) {
+      if (error) throw error;
+      ticketId = data?.id ?? null;
+    } catch (err) {
+      console.error('contact_tickets insert failed', err);
       return NextResponse.json(
         {
           ok: false,
-          error: 'Couldn’t send just now.',
-          mailto: mailtoLink(name, email, message),
+          error:
+            'Couldn’t save your message right now. Please try again in a minute.',
         },
-        { status: 502 }
+        { status: 503 },
+      );
+    }
+
+    // Notify owner — never expose this address to the browser
+    const to = process.env.CONTACT_TO || SITE.supportEmail;
+    const apiKey = process.env.RESEND_API_KEY;
+    if (apiKey) {
+      try {
+        const resend = new Resend(apiKey);
+        const from =
+          process.env.CONTACT_FROM || 'Abroadster <onboarding@resend.dev>';
+        const { error: mailError } = await resend.emails.send({
+          from,
+          to: [to],
+          replyTo: email,
+          subject: `New Abroadster support ticket from ${name}`,
+          text: [
+            'A new support ticket was submitted on the website.',
+            '',
+            `Ticket ID: ${ticketId ?? '(unknown)'}`,
+            `From: ${name} <${email}>`,
+            `Source: ${source}`,
+            '',
+            message,
+            '',
+            'Reply to this email to respond to the sender.',
+          ].join('\n'),
+        });
+        if (mailError) {
+          console.error('contact ticket notify failed', mailError);
+          // Ticket is already stored — still succeed for the user
+        }
+      } catch (err) {
+        console.error('contact ticket notify unexpected', err);
+      }
+    } else {
+      console.warn(
+        'RESEND_API_KEY missing — ticket saved but no owner email sent',
+        ticketId,
       );
     }
 
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json(
-      { ok: false, error: 'Unexpected error. Please email us directly.' },
-      { status: 500 }
+      { ok: false, error: 'Unexpected error. Please try again in a minute.' },
+      { status: 500 },
     );
   }
 }

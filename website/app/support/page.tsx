@@ -17,8 +17,9 @@ export default function SupportPage() {
       <Reveal className={styles.intro}>
         <h1 className="type-bold">Abroadster Support</h1>
         <p className="muted">
-          Need help with the Abroadster iOS or Android app? Use the form on this
-          page or email us. We reply as soon as we can.
+          Need help with the Abroadster app? Send a message with the form below
+          and we’ll reply to the email you provide. Your note is stored securely
+          — you never need our personal inbox address.
         </p>
         <ul className={styles.list}>
           <li>
@@ -53,7 +54,7 @@ export default function SupportPage() {
         <h2 className="type-bold" style={{ marginTop: 0, fontSize: '1.35rem' }}>
           Send a support message
         </h2>
-        <ContactForm />
+          <ContactForm source="support" />
       </Reveal>
     </div>
   );
