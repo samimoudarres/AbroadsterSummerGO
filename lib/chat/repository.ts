@@ -1,6 +1,12 @@
 import { hasSupabase, supabase } from '../supabase';
 import { demoChat, loadDemoState, subscribeDemo, DEMO_ME_ID } from './demoStore';
 import { defaultAvatarUrl } from '../images';
+import {
+  contentTypeForUpload,
+  extensionForUpload,
+  optimizeLocalImageForUpload,
+} from '../images/uploadOptimize';
+import { mapPool } from '../async/mapPool';
 import type {
   AlbumPhoto,
   ChatChannel,
@@ -251,11 +257,14 @@ async function ensureMyProfile(): Promise<void> {
   const abroad =
     String(latest?.study_abroad_program ?? '').trim() || studyAbroadProgram;
   if (home || abroad) {
-    try {
-      await supabase.rpc('sync_profile_communities', { p_user_id: user.id });
-    } catch {
-      // 020 / 022 may not be applied yet
-    }
+    // Never block profile/chat open on community sync (RLS / RPC can be slow).
+    void (async () => {
+      try {
+        await supabase.rpc('sync_profile_communities', { p_user_id: user.id });
+      } catch {
+        // ignore
+      }
+    })();
   }
 }
 
@@ -711,10 +720,36 @@ export const chatRepo = {
       }
     }
 
-    const { data: memberships } = await supabase!
+    // Prefer security-definer RPC (avoids community_members RLS recursion).
+    // Do not hit community_members table directly while peer policies recurse.
+    try {
+      const { data: rpcRows, error: rpcErr } = await supabase!.rpc(
+        'get_my_school_communities',
+      );
+      if (!rpcErr) {
+        const rows = asRpcRows(rpcRows);
+        if (rows.length) {
+          return sortPills(
+            rows.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              kind: c.kind,
+              accent: c.accent,
+              logoUri: c.logo_url,
+              channelIds: (c.channel_ids ?? {}) as ChatCommunity['channelIds'],
+            })),
+          );
+        }
+      }
+    } catch {
+      // fall through
+    }
+
+    const { data: memberships, error: memErr } = await supabase!
       .from('community_members')
       .select('community_id, communities(*)')
       .eq('user_id', me.id);
+    if (memErr) return [];
     const communities: ChatCommunity[] = [];
     for (const row of memberships ?? []) {
       const c = (row as any).communities;
@@ -761,10 +796,15 @@ export const chatRepo = {
     if (!(await useLive()) || !isUuid(communityId)) {
       return demoChat.getCommunityMembers(communityId);
     }
-    const { data } = await supabase!
+    const { data, error } = await supabase!
       .from('community_members')
       .select('profiles(*)')
       .eq('community_id', communityId);
+    if (error) {
+      // Avoid hard-failing the UI while peer RLS is broken; members sheet stays empty.
+      console.warn('getCommunityMembers', error.message);
+      return [];
+    }
     return (data ?? [])
       .map((r: any) => r.profiles)
       .filter(Boolean)
@@ -779,19 +819,41 @@ export const chatRepo = {
     if (!(await useLive()) || isDemoTarget(target)) {
       return demoChat.getMessages(target, { limit, before: opts?.before });
     }
-    // Newest page first, then reverse for chronological FlatList
-    let q = supabase!
-      .from('messages')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
-    if (target.type === 'dm') q = q.eq('dm_thread_id', target.threadId);
-    else q = q.eq('channel_id', target.channelId);
-    if (opts?.before) q = q.lt('created_at', opts.before);
-    const { data, error } = await q;
-    if (error) throw error;
-    const rows = data ?? [];
-    // Load reactions separately (avoids embed RLS wiping the parent query)
+
+    let rows: any[] = [];
+    // Prefer security-definer RPC (avoids community_members RLS recursion).
+    const { data: rpcRows, error: rpcErr } = await supabase!.rpc(
+      'list_chat_messages',
+      {
+        p_channel_id: target.type === 'channel' ? target.channelId : null,
+        p_dm_thread_id: target.type === 'dm' ? target.threadId : null,
+        p_limit: limit,
+        p_before: opts?.before ?? null,
+      },
+    );
+    if (!rpcErr && Array.isArray(rpcRows)) {
+      rows = rpcRows;
+    } else {
+      let q = supabase!
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (target.type === 'dm') q = q.eq('dm_thread_id', target.threadId);
+      else q = q.eq('channel_id', target.channelId);
+      if (opts?.before) q = q.lt('created_at', opts.before);
+      const { data, error } = await q;
+      if (error) {
+        // Until 054 is applied, SELECT on messages can recurse — degrade soft.
+        if (/infinite recursion|community_members/i.test(error.message || '')) {
+          console.warn('list messages blocked by RLS; apply migration 054', error.message);
+          return [];
+        }
+        throw error;
+      }
+      rows = data ?? [];
+    }
+
     const ids = rows.map((r: any) => r.id as string).filter(Boolean);
     let reactionsByMsg: Record<string, any[]> = {};
     if (ids.length) {
@@ -842,7 +904,52 @@ export const chatRepo = {
         throw new Error('Messaging isn’t available with this account.');
       }
     }
+
+    const channelId =
+      input.target.type === 'channel' ? input.target.channelId : null;
+    const dmThreadId =
+      input.target.type === 'dm' ? input.target.threadId : null;
+
+    // 1) Prefer security-definer RPC (no SELECT policy recursion on RETURNING).
+    const { data: rpcRow, error: rpcErr } = await supabase!.rpc(
+      'send_chat_message',
+      {
+        p_channel_id: channelId,
+        p_dm_thread_id: dmThreadId,
+        p_kind: input.kind,
+        p_body: input.body ?? null,
+        p_reply_to_id: input.replyToId ?? null,
+        p_trip_id: input.tripId ?? null,
+        p_poll_id: input.pollId ?? null,
+        p_image_url: input.imageUrl ?? null,
+        p_post_id: input.postId ?? null,
+        p_metadata: input.metadata ?? {},
+      },
+    );
+    if (!rpcErr && rpcRow) {
+      notifyChatListeners();
+      const mapped = mapMessage(rpcRow);
+      if (!mapped.tripId && input.tripId) {
+        return {
+          ...mapped,
+          tripId: input.tripId,
+          metadata: { ...mapped.metadata, tripId: input.tripId },
+        };
+      }
+      return mapped;
+    }
+
+    // 2) Fallback: insert without RETURNING (SELECT on messages can recurse).
+    const id =
+      globalThis.crypto?.randomUUID?.() ??
+      'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+    const now = new Date().toISOString();
     const row: any = {
+      id,
       sender_id: me.id,
       kind: input.kind,
       body: input.body ?? null,
@@ -852,20 +959,17 @@ export const chatRepo = {
       image_url: input.imageUrl ?? null,
       post_id: input.postId ?? null,
       metadata: input.metadata ?? {},
+      created_at: now,
     };
-    if (input.target.type === 'dm') row.dm_thread_id = input.target.threadId;
-    else row.channel_id = input.target.channelId;
+    if (dmThreadId) row.dm_thread_id = dmThreadId;
+    else row.channel_id = channelId;
 
-    // Avoid embedding reactions here — separate policy can wipe RETURNING.
-    const { data, error } = await supabase!
-      .from('messages')
-      .insert(row)
-      .select('*')
-      .single();
-    if (error) throw error;
+    const { error } = await supabase!.from('messages').insert(row);
+    if (error) {
+      throw rpcErr ?? error;
+    }
     notifyChatListeners();
-    const mapped = mapMessage(data);
-    // Keep tripId even if column was null for any reason
+    const mapped = mapMessage(row);
     if (!mapped.tripId && input.tripId) {
       return {
         ...mapped,
@@ -1573,14 +1677,7 @@ export const chatRepo = {
       return demoChat.createPost(input);
     }
     const me = await this.getMe();
-    const uploaded: Array<{
-      image_url: string;
-      sort_order: number;
-      crop_json: Record<string, number>;
-    }> = [];
-
-    for (let i = 0; i < input.photos.length; i++) {
-      const photo = input.photos[i];
+    const uploaded = await mapPool(input.photos, 3, async (photo, i) => {
       let imageUrl: string;
       if (typeof photo.uri === 'string' && /^https?:\/\//i.test(photo.uri)) {
         imageUrl = photo.uri;
@@ -1592,7 +1689,7 @@ export const chatRepo = {
         );
       }
       const crop = photo.crop ?? DEFAULT_CROP;
-      uploaded.push({
+      return {
         image_url: imageUrl,
         sort_order: i,
         crop_json: {
@@ -1600,8 +1697,8 @@ export const chatRepo = {
           offsetX: crop.offsetX,
           offsetY: crop.offsetY,
         },
-      });
-    }
+      };
+    });
 
     const taggedTripId =
       input.taggedTripId && isUuid(input.taggedTripId)
@@ -1660,14 +1757,7 @@ export const chatRepo = {
       return demoChat.updatePost(postId, input);
     }
     const me = await this.getMe();
-    const uploaded: Array<{
-      image_url: string;
-      sort_order: number;
-      crop_json: Record<string, number>;
-    }> = [];
-
-    for (let i = 0; i < input.photos.length; i++) {
-      const photo = input.photos[i];
+    const uploaded = await mapPool(input.photos, 3, async (photo, i) => {
       let imageUrl: string;
       if (typeof photo.uri === 'string' && /^https?:\/\//i.test(photo.uri)) {
         imageUrl = photo.uri;
@@ -1677,7 +1767,7 @@ export const chatRepo = {
         throw new Error('Could not upload that photo.');
       }
       const crop = photo.crop ?? DEFAULT_CROP;
-      uploaded.push({
+      return {
         image_url: imageUrl,
         sort_order: i,
         crop_json: {
@@ -1685,8 +1775,8 @@ export const chatRepo = {
           offsetX: crop.offsetX,
           offsetY: crop.offsetY,
         },
-      });
-    }
+      };
+    });
 
     const { error } = await supabase!.rpc('update_post', {
       p_post_id: postId,
@@ -1719,46 +1809,65 @@ export const chatRepo = {
       return demoChat.listAuthorPosts(authorId);
     }
     try {
+      // Don't block the nested posts query on getMe / ensureMyProfile.
+      const mePromise = this.getMe().catch(() => ({ id: cachedAuthUserId || '' }));
       const { data: rows, error } = await supabase!
         .from('posts')
-        .select('*')
+        .select(
+          `
+          id,
+          author_id,
+          caption,
+          location_label,
+          latitude,
+          longitude,
+          created_at,
+          display_mode,
+          collage_layout_id,
+          audience,
+          tagged_trip_id,
+          post_photos ( image_url, crop_json, sort_order ),
+          post_stamps ( user_id, created_at ),
+          post_tags ( user_id )
+        `,
+        )
         .eq('author_id', authorId)
         .order('created_at', { ascending: false })
         .limit(60);
       if (error) throw error;
-      const mapped: FeedPost[] = [];
-      for (const p of rows ?? []) {
-        const full = await this.getPost(p.id);
-        if (full) mapped.push(full);
-      }
+      const me = await mePromise;
+      const mapped = (rows ?? []).map((row) =>
+        mapEmbeddedAuthorPost(row, me.id || ''),
+      );
       if (!allowDemoSeedMerge()) return mapped;
       const demo = await demoChat.listAuthorPosts(authorId);
       if (!mapped.length) return demo;
       const seen = new Set(mapped.map((x) => x.id));
       return [...mapped, ...demo.filter((d) => !seen.has(d.id))];
-    } catch {
+    } catch (err) {
+      console.warn('listAuthorPosts nested load failed', err);
       if (!allowDemoSeedMerge()) return [];
       return demoChat.listAuthorPosts(authorId);
     }
   },
 
-  async togglePostStamp(postId: string): Promise<FeedPost | null> {
+  async togglePostStamp(
+    postId: string,
+  ): Promise<{ iStamped: boolean; stampCount: number } | null> {
     if (!(await useLive()) || !isUuid(postId)) {
-      return demoChat.togglePostStamp(postId);
+      const post = await demoChat.togglePostStamp(postId);
+      if (!post) return null;
+      return { iStamped: post.iStamped, stampCount: post.stampCount };
     }
     const { data, error } = await supabase!.rpc('toggle_post_stamp', {
       p_post_id: postId,
     });
     if (error) throw error;
-    const post = await this.getPost(postId);
-    if (post && data) {
-      return {
-        ...post,
-        iStamped: Boolean(data.stamped),
-        stampCount: data.stamp_count ?? post.stampCount,
-      };
-    }
-    return post;
+    if (!data) return null;
+    return {
+      iStamped: Boolean((data as any).stamped),
+      stampCount: Number((data as any).stamp_count ?? 0),
+    };
   },
 
   async listPostStampers(postId: string): Promise<ChatProfile[]> {
@@ -1937,7 +2046,10 @@ export const chatRepo = {
     }
   },
 
-  async getTripAlbumPhotos(tripId: string): Promise<AlbumPhoto[]> {
+  async getTripAlbumPhotos(
+    tripId: string,
+    opts?: { withLikes?: boolean },
+  ): Promise<AlbumPhoto[]> {
     const demo = await demoChat.getTripAlbumPhotos(tripId);
     if (!(await useLive()) || !isUuid(tripId)) return demo;
     try {
@@ -1964,26 +2076,29 @@ export const chatRepo = {
       }));
       if (!live.length) return demo;
 
-      try {
-        const me = await this.getMe();
-        const ids = live.map((p) => p.id);
-        const { data: likes } = await supabase!
-          .from('album_photo_likes')
-          .select('photo_id, user_id')
-          .in('photo_id', ids);
-        const countBy = new Map<string, number>();
-        const likedMine = new Set<string>();
-        for (const row of likes ?? []) {
-          const pid = (row as any).photo_id as string;
-          countBy.set(pid, (countBy.get(pid) ?? 0) + 1);
-          if ((row as any).user_id === me.id) likedMine.add(pid);
+      // Likes are only needed in the full-screen viewer — skip on album open.
+      if (opts?.withLikes) {
+        try {
+          const me = await this.getMe();
+          const ids = live.map((p) => p.id);
+          const { data: likes } = await supabase!
+            .from('album_photo_likes')
+            .select('photo_id, user_id')
+            .in('photo_id', ids);
+          const countBy = new Map<string, number>();
+          const likedMine = new Set<string>();
+          for (const row of likes ?? []) {
+            const pid = (row as any).photo_id as string;
+            countBy.set(pid, (countBy.get(pid) ?? 0) + 1);
+            if ((row as any).user_id === me.id) likedMine.add(pid);
+          }
+          for (const p of live) {
+            p.likeCount = countBy.get(p.id) ?? 0;
+            p.likedByMe = likedMine.has(p.id);
+          }
+        } catch {
+          // likes table may not exist yet
         }
-        for (const p of live) {
-          p.likeCount = countBy.get(p.id) ?? 0;
-          p.likedByMe = likedMine.has(p.id);
-        }
-      } catch {
-        // likes table may not exist yet
       }
 
       // Prefer live rows; never pad with demo photos that share the same URL
@@ -2022,10 +2137,9 @@ export const chatRepo = {
       return demoChat.uploadTripAlbumPhotos(tripId, localUris);
     }
     const me = await this.getMe();
-    const urls: string[] = [];
-    for (let i = 0; i < localUris.length; i++) {
-      urls.push(await uploadAlbumPhoto(me.id, localUris[i], i));
-    }
+    const urls = await mapPool(localUris, 3, (uri, i) =>
+      uploadAlbumPhoto(me.id, uri, i),
+    );
     const { data, error } = await supabase!.rpc('upload_album_photos', {
       p_trip_id: tripId,
       p_image_urls: urls,
@@ -3500,6 +3614,50 @@ async function hydrateTrip(
   };
 }
 
+/** Map a posts row with embedded post_photos / post_stamps / post_tags → FeedPost. */
+function mapEmbeddedAuthorPost(row: any, meId: string): FeedPost {
+  const photos = [...(Array.isArray(row.post_photos) ? row.post_photos : [])].sort(
+    (a: any, b: any) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0),
+  );
+  const stamps = [
+    ...(Array.isArray(row.post_stamps) ? row.post_stamps : []),
+  ].sort(
+    (a: any, b: any) =>
+      new Date(b?.created_at ?? 0).getTime() -
+      new Date(a?.created_at ?? 0).getTime(),
+  );
+  const stampIds = stamps.map((s: any) => s.user_id as string).filter(Boolean);
+  const tags = Array.isArray(row.post_tags) ? row.post_tags : [];
+
+  return {
+    id: row.id,
+    authorId: row.author_id,
+    caption: row.caption ?? '',
+    locationLabel: row.location_label,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    createdAt: row.created_at,
+    photoUrls: photos.map((x: any) => x.image_url),
+    photoCrops: photos.map((x: any) => {
+      const c = x.crop_json;
+      if (!c || typeof c !== 'object') return { ...DEFAULT_CROP };
+      return {
+        scale: Number(c.scale) || 1,
+        offsetX: Number(c.offsetX) || 0,
+        offsetY: Number(c.offsetY) || 0,
+      };
+    }),
+    stampCount: stampIds.length,
+    iStamped: stampIds.includes(meId),
+    stamperPreviewIds: stampIds.slice(0, 3),
+    displayMode: (row.display_mode as FeedPost['displayMode']) ?? 'carousel',
+    collageLayoutId: row.collage_layout_id ?? null,
+    audience: (row.audience as FeedPost['audience']) ?? 'all',
+    taggedTripId: row.tagged_trip_id ?? null,
+    taggedUserIds: tags.map((t: any) => t.user_id as string).filter(Boolean),
+  };
+}
+
 function mapFeedPostRow(row: any): FeedPost {
   const crops = Array.isArray(row.photo_crops) ? row.photo_crops : [];
   return {
@@ -3537,13 +3695,12 @@ async function uploadPostPhoto(
   localUri: string,
   index: number,
 ): Promise<string> {
-  const ext =
-    localUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+  const optimized = await optimizeLocalImageForUpload(localUri);
+  const ext = extensionForUpload(optimized.uri, optimized.jpeg);
+  const contentType = contentTypeForUpload(optimized.uri, optimized.jpeg);
   const path = `${userId}/${Date.now()}-${index}.${ext}`;
-  const res = await fetch(localUri);
+  const res = await fetch(optimized.uri);
   const buf = await res.arrayBuffer();
-  const contentType =
-    ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
   const { error } = await supabase!.storage
     .from('post-photos')
     .upload(path, buf, { contentType, upsert: false });
@@ -3563,12 +3720,12 @@ async function uploadAlbumPhoto(
   }
   const uri = String(localUri);
   if (uri.startsWith('http://') || uri.startsWith('https://')) return uri;
-  const ext = uri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+  const optimized = await optimizeLocalImageForUpload(uri);
+  const ext = extensionForUpload(optimized.uri, optimized.jpeg);
+  const contentType = contentTypeForUpload(optimized.uri, optimized.jpeg);
   const path = `${userId}/${Date.now()}-${index}.${ext}`;
-  const res = await fetch(uri);
+  const res = await fetch(optimized.uri);
   const buf = await res.arrayBuffer();
-  const contentType =
-    ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
   const { error } = await supabase!.storage
     .from('album-photos')
     .upload(path, buf, { contentType, upsert: false });

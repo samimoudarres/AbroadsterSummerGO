@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   Image,
-  ImageBackground,
   Pressable,
   StyleSheet,
   Text,
@@ -16,6 +15,7 @@ import {
   ALBUM_PLACEHOLDER_PHOTOS,
 } from '../../lib/trips/albumPlaceholders';
 import { toImageSource } from '../../lib/images';
+import { storageDisplayUrl } from '../../lib/images/displayUrl';
 import { Avatar } from '../common/Avatar';
 
 /** Default card width used in profile / feed rails (~smaller than half-width). */
@@ -27,6 +27,9 @@ export const ALBUM_CARD_WIDTH = 148;
  */
 function coverSource(src: string | number) {
   if (typeof src === 'number') return src;
+  if (typeof src === 'string') {
+    return toImageSource(storageDisplayUrl(src, 'cover'));
+  }
   return toImageSource(src);
 }
 
@@ -104,9 +107,8 @@ export function AlbumPreviewCard({
         ]}
       >
         <Image
-          source={coverSource(covers[2])}
+          source={coverSource(covers[2]) as any}
           style={styles.stackImg}
-          resizeMode="cover"
         />
       </View>
       <View
@@ -122,19 +124,17 @@ export function AlbumPreviewCard({
         ]}
       >
         <Image
-          source={coverSource(covers[1])}
+          source={coverSource(covers[1]) as any}
           style={styles.stackImg}
-          resizeMode="cover"
         />
       </View>
 
       {/* Front card */}
-      <ImageBackground
-        source={coverSource(covers[0])}
-        style={[styles.front, { width: size, height: size }]}
-        imageStyle={styles.frontImg}
-        resizeMode="cover"
-      >
+      <View style={[styles.front, { width: size, height: size }]}>
+        <Image
+          source={coverSource(covers[0]) as any}
+          style={styles.frontImgFill}
+        />
         <View style={styles.dim} />
         <View style={styles.topBlock}>
           <View style={styles.ownerRow}>
@@ -181,7 +181,7 @@ export function AlbumPreviewCard({
             </Text>
           ) : null}
         </View>
-      </ImageBackground>
+      </View>
     </Pressable>
   );
 }
@@ -221,8 +221,12 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 2, height: 6 },
     elevation: 8,
+    backgroundColor: '#D8DEE8',
   },
-  frontImg: { borderRadius: R },
+  frontImgFill: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: R,
+  },
   dim: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.28)',

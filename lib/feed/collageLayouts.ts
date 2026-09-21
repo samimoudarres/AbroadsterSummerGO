@@ -10,8 +10,10 @@ export type CollageLayoutId =
   | 'quad_wide_top'
   | 'five_portrait'
   | 'six_feature'
+  | 'seven_feature'
   | 'eight_3x3_2'
-  | 'nine_grid';
+  | 'nine_grid'
+  | 'ten_grid';
 
 /** Slot rect as percentages of canvas (0–100). */
 export type CollageSlot = {
@@ -145,6 +147,21 @@ export const COLLAGE_LAYOUTS: CollageLayout[] = [
     ],
   },
   {
+    id: 'seven_feature',
+    label: '7',
+    hint: 'Feature+',
+    aspect: 1,
+    slots: [
+      { x: 0, y: 0, w: 50, h: 50 },
+      { x: 50, y: 0, w: 50, h: 50 },
+      { x: 0, y: 50, w: 25, h: 25 },
+      { x: 25, y: 50, w: 25, h: 25 },
+      { x: 50, y: 50, w: 25, h: 25 },
+      { x: 75, y: 50, w: 25, h: 25 },
+      { x: 0, y: 75, w: 100, h: 25 },
+    ],
+  },
+  {
     id: 'eight_3x3_2',
     label: '8',
     hint: '8-up',
@@ -175,6 +192,24 @@ export const COLLAGE_LAYOUTS: CollageLayout[] = [
       { x: 0, y: 66.67, w: 33.33, h: 33.33 },
       { x: 33.33, y: 66.67, w: 33.34, h: 33.33 },
       { x: 66.67, y: 66.67, w: 33.33, h: 33.33 },
+    ],
+  },
+  {
+    id: 'ten_grid',
+    label: '10',
+    hint: 'Dense',
+    aspect: 1,
+    slots: [
+      { x: 0, y: 0, w: 20, h: 50 },
+      { x: 20, y: 0, w: 20, h: 50 },
+      { x: 40, y: 0, w: 20, h: 50 },
+      { x: 60, y: 0, w: 20, h: 50 },
+      { x: 80, y: 0, w: 20, h: 50 },
+      { x: 0, y: 50, w: 20, h: 50 },
+      { x: 20, y: 50, w: 20, h: 50 },
+      { x: 40, y: 50, w: 20, h: 50 },
+      { x: 60, y: 50, w: 20, h: 50 },
+      { x: 80, y: 50, w: 20, h: 50 },
     ],
   },
 ];

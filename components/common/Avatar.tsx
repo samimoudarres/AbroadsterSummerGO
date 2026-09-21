@@ -14,6 +14,7 @@ import {
   ensureImageUri,
   toImageSource,
 } from '../../lib/images';
+import { storageDisplayUrl } from '../../lib/images/displayUrl';
 
 interface AvatarProps {
   source?: ImageSource | null;
@@ -27,6 +28,7 @@ interface AvatarProps {
 /**
  * Resolves require() assets and remote URLs the same way map pins do,
  * so avatars render on web and native.
+ * Uses RN Image (stable on iOS) + small display transforms for faster loads.
  */
 export function Avatar({
   source,
@@ -36,7 +38,9 @@ export function Avatar({
   name,
 }: AvatarProps) {
   const [uri, setUri] = useState<string | null>(() => {
-    if (typeof source === 'string' && source) return source;
+    if (typeof source === 'string' && source) {
+      return storageDisplayUrl(source, 'avatar');
+    }
     return null;
   });
 
@@ -48,12 +52,16 @@ export function Avatar({
         return;
       }
       if (typeof source === 'string') {
-        if (!cancelled) setUri(source);
+        if (!cancelled) setUri(storageDisplayUrl(source, 'avatar'));
         return;
       }
       try {
         const resolved = await ensureImageUri(source);
-        if (!cancelled) setUri(resolved || null);
+        if (!cancelled) {
+          setUri(
+            resolved ? storageDisplayUrl(resolved, 'avatar') || resolved : null,
+          );
+        }
       } catch {
         if (!cancelled) setUri(null);
       }

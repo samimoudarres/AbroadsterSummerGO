@@ -1,5 +1,11 @@
 import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  InteractionManager,
+  StyleSheet,
+  View,
+} from 'react-native';
 import * as Linking from 'expo-linking';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
@@ -32,6 +38,7 @@ import { schoolMapTarget } from '../../lib/schoolMapTarget';
 import { useAuth } from '../../lib/auth/AuthContext';
 import { useBottomNavClearance } from '../../lib/layout/safeArea';
 import { startNotificationResponseRouting } from '../../lib/push/notificationRouting';
+import { ensureWeeklyFriendsTripsReminder } from '../../lib/trips/weeklyFriendsTripsReminder';
 import { parseTripInviteTokenFromUrl } from '../../lib/trips/inviteLinks';
 import type { UserProfile } from '../../data/types';
 import type { ChatProfile, ChatTrip, FeedPost } from '../../data/chatTypes';
@@ -113,6 +120,7 @@ export function AppShell() {
     communityId: string;
     slug?: string;
   } | null>(null);
+  const [weekendFriendsFocusToken, setWeekendFriendsFocusToken] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [editPostId, setEditPostId] = useState<string | null>(null);
@@ -163,28 +171,41 @@ export function AppShell() {
   const overlayBottom = hideBottomNav ? 0 : navClearance;
 
   const openProfileFromChat = async (user: ChatProfile) => {
-    if (await chatRepo.isBlockedEither(user.id).catch(() => false)) {
-      Alert.alert(
-        'Unavailable',
-        'This profile isn’t available because of a block.',
-      );
-      return;
-    }
-    const friend = await chatRepo.isFriend(user.id).catch(() => false);
-    const next = chatToUserProfile(user, friend);
-    setProfileUser(next);
+    // Kick profile JSON + thumb prefetch immediately; show UI without waiting.
+    void import('../../lib/profile/profileCache').then((m) =>
+      m.fetchProfileBundle(user.id),
+    );
+    setProfileUser(chatToUserProfile(user, false));
     setShowProfile(true);
+    void (async () => {
+      if (await chatRepo.isBlockedEither(user.id).catch(() => false)) {
+        setShowProfile(false);
+        Alert.alert(
+          'Unavailable',
+          'This profile isn’t available because of a block.',
+        );
+        return;
+      }
+      const friend = await chatRepo.isFriend(user.id).catch(() => false);
+      if (friend) setProfileUser(chatToUserProfile(user, true));
+    })();
   };
 
   const openOwnProfileInstant = () => {
     setActiveTab('profile');
     if (meProfile) {
+      void import('../../lib/profile/profileCache').then((m) =>
+        m.fetchProfileBundle(meProfile.id),
+      );
       setProfileUser(meProfile);
       setShowProfile(true);
     }
     void (async () => {
       try {
         const me = await chatRepo.getMe();
+        void import('../../lib/profile/profileCache').then((m) =>
+          m.fetchProfileBundle(me.id),
+        );
         const next = chatToUserProfile(me, false);
         setMeProfile(next);
         setProfileUser(next);
@@ -242,6 +263,9 @@ export function AppShell() {
           slug: nav.slug,
         });
         setActiveTab('messages');
+      } else if (nav.type === 'trips_weekend') {
+        setActiveTab('trips');
+        setWeekendFriendsFocusToken((n) => n + 1);
       }
     },
     // openProfileById is stable enough for this shell lifetime
@@ -252,6 +276,11 @@ export function AppShell() {
   useEffect(() => {
     return startNotificationResponseRouting(handleNotificationNav);
   }, [handleNotificationNav]);
+
+  // Monday noon local reminder → friends' weekend trips (device-local schedule).
+  useEffect(() => {
+    void ensureWeeklyFriendsTripsReminder();
+  }, []);
 
   // Trip invite deep links: abroadster://trip/TOKEN or HTTPS invite.html?t=
   useEffect(() => {
@@ -295,22 +324,37 @@ export function AppShell() {
     };
   }, []);
 
-  // Prefetch own profile so the nav tab opens without a blank loading state
+  // Light startup: resolve "me" for nav/profile tab, but defer the heavy
+  // posts/albums warm until after first interactions/paint (default tab is map).
   useEffect(() => {
     let cancelled = false;
+    let warmTimer: ReturnType<typeof setTimeout> | null = null;
+    let interactionHandle: { cancel: () => void } | null = null;
+
     void (async () => {
       try {
         await initChat();
         const me = await chatRepo.getMe();
         if (cancelled) return;
         setMeProfile(chatToUserProfile(me, false));
-        await warmOwnProfileCache();
+
+        interactionHandle = InteractionManager.runAfterInteractions(() => {
+          if (cancelled) return;
+          // Extra beat so Map's first frame isn't competing with profile warm.
+          warmTimer = setTimeout(() => {
+            if (cancelled) return;
+            void warmOwnProfileCache();
+          }, 400);
+        });
       } catch {
         // offline / signed out — profile tab will fetch on demand
       }
     })();
+
     return () => {
       cancelled = true;
+      interactionHandle?.cancel();
+      if (warmTimer) clearTimeout(warmTimer);
     };
   }, []);
 
@@ -441,6 +485,7 @@ export function AppShell() {
           pointerEvents={showTrips ? 'auto' : 'none'}
         >
           <TripsScreen
+            weekendFriendsFocusToken={weekendFriendsFocusToken}
             onOpenProfile={(user) => {
               setProfileUser(user);
               setShowProfile(true);
@@ -465,6 +510,8 @@ export function AppShell() {
         }}
         onOpenAlbum={(tripId) => {
           setShowProfile(false);
+          // Start album photo fetch before the screen mounts.
+          void chatRepo.getTripAlbumPhotos(tripId).catch(() => {});
           setAlbumTripId(tripId);
         }}
         onOpenSchool={(label, kind) => {

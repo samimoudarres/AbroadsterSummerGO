@@ -29,8 +29,11 @@ import { MAPBOX_TOKEN } from '../../lib/mapConfig';
 import { searchPlaces, type PlaceSuggestion } from '../../lib/geocode';
 import { CountryBadge } from '../passport/CountryBadge';
 
-const ROW_H = 48;
+const ROW_H = 46;
+const GAP = 6;
+const SLOT = ROW_H + GAP;
 const PLACEHOLDER_SLOTS = 5;
+const SPRING = { damping: 22, stiffness: 320, mass: 0.6 };
 
 interface PassportPanelProps {
   userId: string;
@@ -48,14 +51,16 @@ function medalFor(index: number): { name: keyof typeof Ionicons.glyphMap; color:
 function DraggableCityRow({
   city,
   index,
+  count,
   isOwn,
-  onDragEnd,
+  onReorder,
   onPress,
 }: {
   city: PassportCityRank;
   index: number;
+  count: number;
   isOwn: boolean;
-  onDragEnd: (from: number, to: number) => void;
+  onReorder: (from: number, to: number) => void;
   onPress: () => void;
 }) {
   const translateY = useSharedValue(0);
@@ -64,7 +69,7 @@ function DraggableCityRow({
   const medal = medalFor(index);
 
   const pan = Gesture.Pan()
-    .activateAfterLongPress(280)
+    .activateAfterLongPress(180)
     .enabled(isOwn)
     .onBegin(() => {
       startIndex.current = index;
@@ -74,13 +79,17 @@ function DraggableCityRow({
       translateY.value = e.translationY;
     })
     .onEnd((e) => {
-      const delta = Math.round(e.translationY / ROW_H);
-      const to = Math.max(0, startIndex.current + delta);
-      translateY.value = withSpring(0);
+      const delta = Math.round(e.translationY / SLOT);
+      const to = Math.max(0, Math.min(count - 1, startIndex.current + delta));
+      translateY.value = withSpring(0, SPRING);
       z.value = 0;
       if (to !== startIndex.current) {
-        runOnJS(onDragEnd)(startIndex.current, to);
+        runOnJS(onReorder)(startIndex.current, to);
       }
+    })
+    .onFinalize(() => {
+      translateY.value = withSpring(0, SPRING);
+      z.value = 0;
     });
 
   const animStyle = useAnimatedStyle(() => ({
@@ -102,7 +111,32 @@ function DraggableCityRow({
             {city.cityName}
           </Text>
           {isOwn ? (
-            <Ionicons name="menu" size={14} color={colors.textMuted} />
+            <View style={styles.rankActions}>
+              <Pressable
+                hitSlop={8}
+                disabled={index === 0}
+                onPress={() => {
+                  if (index > 0) onReorder(index, index - 1);
+                }}
+                style={[styles.chevBtn, index === 0 && styles.chevBtnOff]}
+              >
+                <Ionicons name="chevron-up" size={16} color={colors.programBlue} />
+              </Pressable>
+              <Pressable
+                hitSlop={8}
+                disabled={index >= count - 1}
+                onPress={() => {
+                  if (index < count - 1) onReorder(index, index + 1);
+                }}
+                style={[
+                  styles.chevBtn,
+                  index >= count - 1 && styles.chevBtnOff,
+                ]}
+              >
+                <Ionicons name="chevron-down" size={16} color={colors.programBlue} />
+              </Pressable>
+              <Ionicons name="menu" size={14} color={colors.textMuted} />
+            </View>
           ) : null}
         </Pressable>
       </Animated.View>
@@ -127,7 +161,9 @@ export function PassportPanel({
   const isOwn = isOwnSender(userId, meId);
   const leftW = Math.floor(width * 0.48);
   const rightW = width - leftW - 8;
-
+  const cities = data?.cities ?? [];
+  const citiesRef = useRef(cities);
+  citiesRef.current = cities;
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = Boolean(opts?.silent);
     const cached = getCachedPassport(userId);
@@ -214,21 +250,24 @@ export function PassportPanel({
     return [...unlocked, ...locked];
   }, [unlockedKeys]);
 
-  const cities = data?.cities ?? [];
-
-  const onDragEnd = async (from: number, to: number) => {
-    if (from === to || !isOwn) return;
-    const next = [...cities];
-    const [item] = next.splice(from, 1);
-    next.splice(Math.min(to, next.length), 0, item);
-    const reordered = next.map((c, i) => ({ ...c, sortOrder: i }));
-    setData((d) => (d ? { ...d, cities: reordered } : d));
-    try {
-      await chatRepo.reorderPassportCities(reordered.map((c) => c.id));
-    } catch {
-      void load();
-    }
-  };
+  const onReorder = useCallback(
+    (from: number, to: number) => {
+      if (from === to || !isOwn) return;
+      const current = citiesRef.current;
+      const next = [...current];
+      const [item] = next.splice(from, 1);
+      next.splice(Math.min(to, next.length), 0, item);
+      const reordered = next.map((c, i) => ({ ...c, sortOrder: i }));
+      citiesRef.current = reordered;
+      setData((d) => (d ? { ...d, cities: reordered } : d));
+      void chatRepo
+        .reorderPassportCities(reordered.map((c) => c.id))
+        .catch(() => {
+          void load({ silent: true });
+        });
+    },
+    [isOwn, load],
+  );
 
   const onAddPlace = async (place: PlaceSuggestion) => {
     try {
@@ -259,7 +298,6 @@ export function PassportPanel({
 
   return (
     <View style={[styles.root, { width }]}>
-      {/* Left — country badges */}
       <ScrollView
         style={{ width: leftW }}
         contentContainerStyle={styles.badgeGrid}
@@ -288,12 +326,11 @@ export function PassportPanel({
         </View>
       </ScrollView>
 
-      {/* Right — city ranking */}
       <View style={[styles.rightCol, { width: rightW }]}>
         <Text style={styles.colLabel}>Cities ranking</Text>
         {isOwn ? (
           <Text style={styles.rankHint}>
-            Trip cities appear here automatically. Long-press and drag to reorder.
+            Drag to reorder, or tap ↑ ↓. Changes save automatically.
           </Text>
         ) : null}
         <ScrollView
@@ -306,8 +343,9 @@ export function PassportPanel({
               key={city.id}
               city={city}
               index={i}
+              count={cities.length}
               isOwn={isOwn}
-              onDragEnd={onDragEnd}
+              onReorder={onReorder}
               onPress={() => {
                 if (city.tripId) onOpenTrip?.(city.tripId);
               }}
@@ -371,10 +409,9 @@ export function PassportPanel({
                       </Pressable>
                     </View>
                     <Text style={styles.infoPopBody}>
-                      Cities from trips you’ve locked in (Upcoming) show up here
+                      Cities from trips you’ve locked in show up here
                       automatically — your host city is always included. Add more
-                      manually anytime, then long-press and drag to reorder your
-                      ranking.
+                      manually, then drag or use ↑ ↓ to rank them.
                     </Text>
                     <View style={styles.infoPopArrow} />
                   </View>
@@ -463,8 +500,8 @@ const styles = StyleSheet.create({
   rightCol: { flexShrink: 0 },
   cityRow: {
     height: ROW_H,
+    marginBottom: GAP,
     justifyContent: 'center',
-    marginBottom: 6,
   },
   cityPill: {
     height: 40,
@@ -476,10 +513,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    shadowColor: colors.brandTeal,
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
   },
   rankNum: {
     fontFamily: fonts.bold,
@@ -494,6 +527,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.black,
   },
+  rankActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  chevBtn: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11,
+    backgroundColor: colors.brandMint,
+  },
+  chevBtnOff: { opacity: 0.35 },
   placeholderPill: {
     height: 40,
     borderRadius: 20,

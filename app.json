@@ -2,7 +2,7 @@
   "expo": {
     "name": "Abroadster",
     "slug": "sami-moudarres",
-    "version": "1.0.3",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -16,15 +16,14 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.abroadster.app",
-      "entitlements": {
-        "com.apple.developer.declared-age-range": true
-      },
       "config": {
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
         "CFBundleDisplayName": "Abroadster",
-        "UIDeviceFamily": [1],
+        "UIDeviceFamily": [
+          1
+        ],
         "LSRequiresIPhoneOS": true,
         "NSPhotoLibraryUsageDescription": "Abroadster needs access to your photo library so you can upload photos to trip albums and posts.",
         "NSPhotoLibraryAddUsageDescription": "Abroadster needs permission to save trip album photos you choose to your camera roll.",
@@ -209,7 +208,8 @@
           "defaultChannel": "default",
           "enableBackgroundRemoteNotifications": true
         }
-      ]
+      ],
+      "expo-image"
     ],
     "extra": {
       "eas": {

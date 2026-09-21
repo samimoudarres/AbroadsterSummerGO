@@ -16,6 +16,7 @@ import {
 import { colors, fonts } from '../../constants/theme';
 import type { ChatProfile, FeedPost } from '../../data/chatTypes';
 import { feedImageSource } from '../../lib/feed/feedPhotos';
+import { storageDisplayUrl } from '../../lib/images/displayUrl';
 import { getImageAspect, getImageAspectSync } from '../../lib/feed/imageAspect';
 import { formatPostDate, timeAgo } from '../../lib/feed/timeAgo';
 import type { CollageLayoutId } from '../../lib/feed/collageLayouts';
@@ -100,6 +101,22 @@ export function FeedPostCard({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photos[0], post.id, isCollage]);
+
+  // Prefetch current ±1 carousel URLs into expo-image disk/memory cache (native only).
+  useEffect(() => {
+    if (Platform.OS === 'web' || isCollage || photos.length <= 1) return;
+    const urls = [index - 1, index, index + 1]
+      .map((i) => photos[i])
+      .filter(
+        (u): u is string =>
+          typeof u === 'string' && /^https?:\/\//i.test(u.trim()),
+      )
+      .map((u) => storageDisplayUrl(u, 'feed'));
+    if (!urls.length) return;
+    void import('expo-image')
+      .then(({ Image }) => Image.prefetch(urls))
+      .catch(() => {});
+  }, [index, photos, isCollage]);
 
   const reportPost = async (reason: string) => {
     try {
@@ -393,7 +410,9 @@ export function FeedPostCard({
                 height: mediaH,
               }}
             >
-              {photos.map((uri, i) => (
+              {photos.map((uri, i) => {
+                const near = Math.abs(i - index) <= 1;
+                return (
                 <Pressable
                   key={`${post.id}-${i}`}
                   onPress={onPhotoPress}
@@ -404,17 +423,28 @@ export function FeedPostCard({
                     backgroundColor: '#000',
                   }}
                 >
-                  <CollageCanvas
-                    layoutId="single"
-                    photos={[uri]}
-                    crops={[post.photoCrops?.[i] ?? DEFAULT_CROP]}
-                    width={slideW}
-                    height={mediaH}
-                    showPlaceholders={false}
-                    style={{ backgroundColor: '#000' }}
-                  />
+                  {near ? (
+                    <CollageCanvas
+                      layoutId="single"
+                      photos={[uri]}
+                      crops={[post.photoCrops?.[i] ?? DEFAULT_CROP]}
+                      width={slideW}
+                      height={mediaH}
+                      showPlaceholders={false}
+                      style={{ backgroundColor: '#000' }}
+                    />
+                  ) : (
+                    <View
+                      style={{
+                        width: slideW,
+                        height: mediaH,
+                        backgroundColor: '#000',
+                      }}
+                    />
+                  )}
                 </Pressable>
-              ))}
+                );
+              })}
             </ScrollView>
           )
         ) : (

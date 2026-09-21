@@ -24,11 +24,11 @@ import { toImageSource } from '../../lib/images';
 import {
   chatRepo,
   DEMO_ME_ID,
-  initChat,
   isOwnSender,
   subscribeChat,
 } from '../../lib/chat/repository';
 import {
+  awaitProfileEnrichment,
   fetchProfileBundle,
   getCachedProfile,
   setCachedProfile,
@@ -45,6 +45,7 @@ import {
 } from '../common/AbroadsterTopBar';
 import { AlbumPreviewCard, ALBUM_CARD_WIDTH } from '../home/AlbumPreviewCard';
 import { PassportPanel } from './PassportPanel';
+import { ProfileCollageThumb } from './ProfileCollageThumb';
 import { ProfilePostsViewer } from './ProfilePostsViewer';
 import { ProfileMenuSheet, type ProfileMenuItem } from './ProfileMenuSheet';
 import { EditProfileScreen } from './EditProfileScreen';
@@ -53,7 +54,6 @@ import { ReportUserSheet } from './ReportUserSheet';
 import { FriendsListSheet } from './FriendsListSheet';
 import { useBottomNavClearance } from '../../lib/layout/safeArea';
 import { LegalDocumentModal } from '../legal/LegalDocumentModal';
-import { CollageCanvas } from '../home/create/CollageCanvas';
 
 const GRID_GAP = 2;
 const GRID_COLS = 2;
@@ -152,7 +152,7 @@ export function ProfileModal({
   const loadedUserIdRef = useRef<string | null>(null);
   const loadGenRef = useRef(0);
   const navClearance = useBottomNavClearance();
-  const edgeBack = useEdgeSwipeBack(onClose);
+  const edgeBack = useEdgeSwipeBack(onClose, viewerIndex == null);
   const cellW = Math.max(
     1,
     (gridWidth - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS,
@@ -183,16 +183,40 @@ export function ProfileModal({
     const hadCache = Boolean(getCachedProfile(userId));
     if (!silent && !hadCache) setLoadingProfile(true);
     const gen = ++loadGenRef.current;
+    const finish = (bundle: ReturnType<typeof getCachedProfile> | null) => {
+      if (gen !== loadGenRef.current) return;
+      if (bundle) {
+        applyBundle(bundle, {
+          setPosts,
+          setAlbums,
+          setChatProfile,
+          setFriendsCount,
+          setIsFriend,
+          setTripNotify,
+          setProfiles,
+        });
+        loadedUserIdRef.current = userId;
+      }
+      setLoadingProfile(false);
+    };
     try {
-      await initChat();
-      const me = await chatRepo.getMe();
+      void chatRepo.getMe().then((me) => {
+        if (gen === loadGenRef.current) setMeId(me.id);
+      }).catch(() => {});
+
+      const bundle = await Promise.race([
+        fetchProfileBundle(userId),
+        new Promise<Awaited<ReturnType<typeof fetchProfileBundle>>>((resolve) =>
+          setTimeout(() => resolve(getCachedProfile(userId) ?? null), 6000),
+        ),
+      ]);
       if (gen !== loadGenRef.current) return;
-      setMeId(me.id);
-      const bundle = await fetchProfileBundle(userId);
-      if (gen !== loadGenRef.current) return;
-      if (!bundle) return;
-      setCachedProfile(userId, bundle);
-      applyBundle(bundle, {
+      if (bundle) setCachedProfile(userId, bundle);
+      finish(bundle ?? getCachedProfile(userId) ?? null);
+
+      const enriched = await awaitProfileEnrichment(userId);
+      if (gen !== loadGenRef.current || !enriched) return;
+      applyBundle(enriched, {
         setPosts,
         setAlbums,
         setChatProfile,
@@ -201,7 +225,8 @@ export function ProfileModal({
         setTripNotify,
         setProfiles,
       });
-      loadedUserIdRef.current = userId;
+    } catch {
+      finish(getCachedProfile(userId) ?? null);
     } finally {
       if (gen === loadGenRef.current) setLoadingProfile(false);
     }
@@ -703,13 +728,15 @@ export function ProfileModal({
           }
           ListFooterComponent={<View style={{ height: 24 }} />}
           renderItem={({ item: post, index }) => {
-            const thumb =
-              post.photoUrls?.[0] != null
-                ? feedImageSource(post.photoUrls[0])
-                : null;
             const isCollage =
               post.displayMode === 'collage' &&
               Boolean(post.collageLayoutId);
+            const thumb =
+              post.photoUrls?.[0] != null
+                ? feedImageSource(post.photoUrls[0], 'grid')
+                : null;
+            const multi =
+              isCollage || (post.photoUrls?.length ?? 0) > 1;
             return (
               <Pressable
                 onPress={() => setViewerIndex(index)}
@@ -719,20 +746,12 @@ export function ProfileModal({
                 ]}
               >
                 {isCollage && post.collageLayoutId ? (
-                  <View
-                    pointerEvents="none"
-                    style={styles.gridCollageWrap}
-                  >
-                    <CollageCanvas
-                      layoutId={post.collageLayoutId}
-                      photos={post.photoUrls ?? []}
-                      crops={post.photoCrops}
-                      width={cellW}
-                      height={cellW}
-                      showPlaceholders={false}
-                      showSlotNumbers={false}
-                    />
-                  </View>
+                  <ProfileCollageThumb
+                    layoutId={post.collageLayoutId}
+                    photos={post.photoUrls ?? []}
+                    crops={post.photoCrops}
+                    size={cellW}
+                  />
                 ) : thumb ? (
                   <Image source={thumb} style={styles.gridImg} />
                 ) : (
@@ -740,7 +759,7 @@ export function ProfileModal({
                     style={[styles.gridImg, styles.gridPlaceholder]}
                   />
                 )}
-                {!isCollage && (post.photoUrls?.length ?? 0) > 1 ? (
+                {multi && !isCollage ? (
                   <View style={styles.gridBadge}>
                     <Ionicons
                       name="copy-outline"
@@ -900,7 +919,7 @@ function SchoolPill({
       style={[styles.pill, { borderColor: accent, shadowColor: accent }]}
     >
       {logo ? (
-        <Image source={toImageSource(logo)} style={styles.pillLogo} />
+        <Image source={toImageSource(logo) as any} style={styles.pillLogo} />
       ) : (
         <View style={[styles.pillDot, { backgroundColor: accent }]} />
       )}
@@ -951,10 +970,12 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 80,
     backgroundColor: colors.white,
+    overflow: 'hidden',
   },
   screen: {
     flex: 1,
     backgroundColor: colors.white,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
@@ -1230,11 +1251,6 @@ const styles = StyleSheet.create({
   gridImg: {
     width: '100%',
     height: '100%',
-  },
-  gridCollageWrap: {
-    width: '100%',
-    height: '100%',
-    overflow: 'hidden',
   },
   gridPlaceholder: {
     backgroundColor: '#E8E8E8',

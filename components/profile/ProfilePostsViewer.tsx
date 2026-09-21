@@ -76,15 +76,65 @@ export function ProfilePostsViewer({
 
   const toggleStamp = useCallback(
     async (post: FeedPost) => {
-      const updated = await chatRepo.togglePostStamp(post.id);
-      if (!updated) return;
+      const wasStamped = post.iStamped;
+      const optimisticIds = wasStamped
+        ? (post.stamperPreviewIds ?? []).filter(
+            (id) => !meId || !isOwnSender(id, meId),
+          )
+        : [
+            ...(meId ? [meId] : []),
+            ...(post.stamperPreviewIds ?? []).filter(
+              (id) => !meId || !isOwnSender(id, meId),
+            ),
+          ].slice(0, 6);
+      const optimistic: FeedPost = {
+        ...post,
+        iStamped: !wasStamped,
+        stampCount: wasStamped
+          ? Math.max(0, post.stampCount - 1)
+          : post.stampCount + 1,
+        stamperPreviewIds: optimisticIds,
+      };
       setPosts((prev) => {
-        const next = prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p));
+        const next = prev.map((p) => (p.id === post.id ? optimistic : p));
         onPostsChange?.(next);
         return next;
       });
+      try {
+        const updated = await chatRepo.togglePostStamp(post.id);
+        if (!updated) return;
+        setPosts((prev) => {
+          const next = prev.map((p) => {
+            if (p.id !== post.id) return p;
+            const stamperPreviewIds = updated.iStamped
+              ? [
+                  ...(meId ? [meId] : []),
+                  ...(p.stamperPreviewIds ?? []).filter(
+                    (id) => !meId || !isOwnSender(id, meId),
+                  ),
+                ].slice(0, 6)
+              : (p.stamperPreviewIds ?? []).filter(
+                  (id) => !meId || !isOwnSender(id, meId),
+                );
+            return {
+              ...p,
+              iStamped: updated.iStamped,
+              stampCount: updated.stampCount,
+              stamperPreviewIds,
+            };
+          });
+          onPostsChange?.(next);
+          return next;
+        });
+      } catch {
+        setPosts((prev) => {
+          const next = prev.map((p) => (p.id === post.id ? post : p));
+          onPostsChange?.(next);
+          return next;
+        });
+      }
     },
-    [onPostsChange],
+    [meId, onPostsChange],
   );
 
   const onDeletePost = useCallback(
@@ -195,6 +245,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     zIndex: 100,
     backgroundColor: colors.white,
+    overflow: 'hidden',
   },
   topBar: {
     flexDirection: 'row',

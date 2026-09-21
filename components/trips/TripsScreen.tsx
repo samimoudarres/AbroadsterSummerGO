@@ -47,6 +47,8 @@ interface TripsScreenProps {
   onCreateTrip?: () => void;
   onOpenAlbum?: (trip: ChatTrip) => void;
   onAirMail?: (userId: string) => void;
+  /** Bump to open Friends tab filtered to this weekend’s friend trips. */
+  weekendFriendsFocusToken?: number;
 }
 
 export function TripsScreen({
@@ -54,6 +56,7 @@ export function TripsScreen({
   onCreateTrip,
   onOpenAlbum,
   onAirMail,
+  weekendFriendsFocusToken,
 }: TripsScreenProps) {
   const insets = useSafeAreaInsets();
   const topPad =
@@ -70,6 +73,8 @@ export function TripsScreen({
   const [dateStart, setDateStart] = useState<Date | null>(null);
   const [dateEnd, setDateEnd] = useState<Date | null>(null);
   const [friendFilter, setFriendFilter] = useState<FriendFilter>('all');
+  /** From Monday notif: only show the upcoming weekend’s friend trips. */
+  const [weekendOnlyFocus, setWeekendOnlyFocus] = useState(false);
 
   const [countryOpen, setCountryOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -107,6 +112,17 @@ export function TripsScreen({
       unsub();
     };
   }, [refresh]);
+
+  useEffect(() => {
+    if (!weekendFriendsFocusToken) return;
+    setFeedTab('friends');
+    setFriendFilter('all');
+    setCountries([]);
+    setDateStart(null);
+    setDateEnd(null);
+    setWeekendOnlyFocus(true);
+    void refresh();
+  }, [weekendFriendsFocusToken, refresh]);
 
   const schoolHome = me?.homeUniversity ?? 'Home school';
   const schoolAbroad = me?.studyAbroadProgram ?? 'Abroad program';
@@ -164,20 +180,24 @@ export function TripsScreen({
   ]);
 
   const sections = useMemo(() => {
-    const weekends = upcomingWeekends(10);
-    return weekends
-      .map((w) => ({
-        ...w,
-        trips: filtered.filter((t) =>
-          tripOverlapsWeekend(t.dateStart, t.dateEnd, w),
-        ),
-      }))
-      .filter((s) => s.trips.length > 0);
-  }, [filtered]);
+    const weekends = weekendOnlyFocus
+      ? upcomingWeekends(1).slice(0, 1)
+      : upcomingWeekends(10);
+    const mapped = weekends.map((w) => ({
+      ...w,
+      trips: filtered.filter((t) =>
+        tripOverlapsWeekend(t.dateStart, t.dateEnd, w),
+      ),
+    }));
+    // Keep the focused weekend section even when empty so the notif land feels intentional.
+    if (weekendOnlyFocus) return mapped;
+    return mapped.filter((s) => s.trips.length > 0);
+  }, [filtered, weekendOnlyFocus]);
 
   const openFriendsFilter = () => setFriendsOpen(true);
 
   const pickFriendFilter = (value: FriendFilter) => {
+    setWeekendOnlyFocus(false);
     setFriendFilter(value);
     setFriendsOpen(false);
   };
@@ -313,7 +333,10 @@ export function TripsScreen({
         <View style={styles.tabRow}>
           <Pressable
             style={[styles.tab, feedTab === 'friends' && styles.tabActive]}
-            onPress={() => setFeedTab('friends')}
+            onPress={() => {
+              setWeekendOnlyFocus(false);
+              setFeedTab('friends');
+            }}
           >
             <Text
               style={[styles.tabText, feedTab === 'friends' && styles.tabTextActive]}
@@ -323,7 +346,10 @@ export function TripsScreen({
           </Pressable>
           <Pressable
             style={[styles.tab, feedTab === 'mine' && styles.tabActive]}
-            onPress={() => setFeedTab('mine')}
+            onPress={() => {
+              setWeekendOnlyFocus(false);
+              setFeedTab('mine');
+            }}
           >
             <Text
               style={[styles.tabText, feedTab === 'mine' && styles.tabTextActive]}
@@ -375,7 +401,9 @@ export function TripsScreen({
           <Text style={styles.empty}>
             {feedTab === 'mine'
               ? 'You don’t have any trips yet. Tap Create Trip to plan one.'
-              : 'No trips match these filters. Add friends or clear filters to see more.'}
+              : weekendOnlyFocus
+                ? 'None of your friends have trips this weekend yet. Check back soon.'
+                : 'No trips match these filters. Add friends or clear filters to see more.'}
           </Text>
         ) : (
           sections.map((section, idx) => (
@@ -387,12 +415,19 @@ export function TripsScreen({
                     idx === 0 && styles.sectionTitleAccent,
                   ]}
                 >
-                  {section.label}
+                  {weekendOnlyFocus
+                    ? `This weekend · ${section.label}`
+                    : section.label}
                 </Text>
                 <Text style={styles.sectionCount}>{section.trips.length}</Text>
               </View>
               <View style={styles.sectionLine} />
-              {section.trips.map((trip) => {
+              {section.trips.length === 0 ? (
+                <Text style={styles.empty}>
+                  None of your friends have trips this weekend yet.
+                </Text>
+              ) : (
+                section.trips.map((trip) => {
                 const isParticipant = isTripParticipant(trip, me?.id);
                 return (
                 <TripCard
@@ -412,7 +447,8 @@ export function TripsScreen({
                   onAcceptInvite={() => void acceptInvite(trip)}
                 />
                 );
-              })}
+              })
+              )}
             </View>
           ))
         )}
@@ -422,7 +458,10 @@ export function TripsScreen({
         visible={countryOpen}
         selected={countries}
         onClose={() => setCountryOpen(false)}
-        onChange={setCountries}
+        onChange={(next) => {
+          setWeekendOnlyFocus(false);
+          setCountries(next);
+        }}
       />
       <CalendarRangeModal
         visible={calendarOpen}
@@ -430,6 +469,7 @@ export function TripsScreen({
         end={dateEnd}
         onClose={() => setCalendarOpen(false)}
         onChange={(s, e) => {
+          setWeekendOnlyFocus(false);
           setDateStart(s);
           setDateEnd(e);
         }}

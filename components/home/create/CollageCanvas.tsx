@@ -181,7 +181,7 @@ function SlotImage({
       <GestureDetector gesture={composed}>
         <Animated.View style={[styles.imgWrap, { width: sw, height: sh }]}>
           <Animated.Image
-            source={feedImageSource(photo as any)}
+            source={feedImageSource(photo as any, 'full')}
             style={animStyle}
             resizeMode="cover"
           />
@@ -190,22 +190,19 @@ function SlotImage({
     );
   }
 
+  const src = feedImageSource(photo as any, 'feed');
+  const cropStyle =
+    scale <= 1.001 && Math.abs(ox) < 0.001 && Math.abs(oy) < 0.001
+      ? { width: sw, height: sh }
+      : {
+          width: imgW,
+          height: imgH,
+          transform: [{ translateX: tx }, { translateY: ty }],
+        };
+
   return (
     <View style={[styles.imgWrap, { width: sw, height: sh, overflow: 'hidden' }]}>
-      <Image
-        source={feedImageSource(photo as any)}
-        style={
-          // Default crop: fill the slot edge-to-edge (avoids letterbox gaps).
-          scale <= 1.001 && Math.abs(ox) < 0.001 && Math.abs(oy) < 0.001
-            ? { width: sw, height: sh }
-            : {
-                width: imgW,
-                height: imgH,
-                transform: [{ translateX: tx }, { translateY: ty }],
-              }
-        }
-        resizeMode="cover"
-      />
+      <Image source={src} style={cropStyle} resizeMode="cover" />
     </View>
   );
 }

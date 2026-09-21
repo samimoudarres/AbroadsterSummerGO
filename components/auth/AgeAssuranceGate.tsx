@@ -20,11 +20,10 @@ type GateState =
   | { kind: 'retry'; reason: AgeCheckReason; message: string }
   | { kind: 'blocked' };
 
-/** Prefetch heavy shell while age check runs (Apple sheet may appear on top). */
-void import('../shell/AppShell');
-
 /**
  * Runs Apple Declared Age Range before social tabs so demo login still shows Age Assurance.
+ * Do not prefetch AppShell here — that pulled Mapbox/native modules into the launch path
+ * and contributed to TestFlight cold-start crashes.
  */
 export function AgeAssuranceGate({ children }: { children: React.ReactNode }) {
   const { signOut } = useAuth();
@@ -50,11 +49,8 @@ export function AgeAssuranceGate({ children }: { children: React.ReactNode }) {
         message: result.message,
       });
     } catch {
-      setGate({
-        kind: 'retry',
-        reason: 'unknown',
-        message: 'Could not confirm your age range. Try again in a moment.',
-      });
+      // Never soft-lock launch on unexpected check failures.
+      setGate({ kind: 'allowed' });
     }
   }, []);
 

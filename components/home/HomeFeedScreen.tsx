@@ -232,9 +232,29 @@ export function HomeFeedScreen({
       const updated = await chatRepo.togglePostStamp(post.id);
       if (updated) {
         setPosts((prev) =>
-          prev.map((p) => (p.id === post.id ? updated : p)),
+          prev.map((p) => {
+            if (p.id !== post.id) return p;
+            const stamperPreviewIds = updated.iStamped
+              ? [
+                  meId,
+                  ...(p.stamperPreviewIds ?? []).filter(
+                    (id) => !isOwnSender(id, meId),
+                  ),
+                ].slice(0, 6)
+              : (p.stamperPreviewIds ?? []).filter(
+                  (id) => !isOwnSender(id, meId),
+                );
+            return {
+              ...p,
+              iStamped: updated.iStamped,
+              stampCount: updated.stampCount,
+              stamperPreviewIds,
+            };
+          }),
         );
-        await loadProfiles(updated.stamperPreviewIds ?? []);
+        if (updated.iStamped) {
+          await loadProfiles([meId]);
+        }
       }
     } catch {
       setPosts((prev) => prev.map((p) => (p.id === post.id ? post : p)));
@@ -290,6 +310,10 @@ export function HomeFeedScreen({
         ref={listRef}
         data={rows}
         keyExtractor={(item) => item.key}
+        initialNumToRender={4}
+        maxToRenderPerBatch={4}
+        windowSize={7}
+        updateCellsBatchingPeriod={50}
         onScrollToIndexFailed={(info) => {
           setTimeout(() => {
             listRef.current?.scrollToIndex({

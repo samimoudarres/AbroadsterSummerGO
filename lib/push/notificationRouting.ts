@@ -78,6 +78,9 @@ export function notificationDataToNav(
     }
     return { type: 'trip', tripId };
   }
+  if (kind === 'friends_weekend_trips') {
+    return { type: 'trips_weekend' };
+  }
   return null;
 }
 

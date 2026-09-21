@@ -1,4 +1,8 @@
 import type { ImageSourcePropType } from 'react-native';
+import {
+  storageDisplayUrl,
+  type DisplaySize,
+} from '../images/displayUrl';
 import { ALBUM_PLACEHOLDER_PHOTOS } from '../trips/albumPlaceholders';
 
 /** High-res local feed assets (require module ids). */
@@ -57,12 +61,16 @@ export function usablePostPhotos(
 /**
  * Home-feed Image source. Pass require() module ids through as numbers —
  * converting them to { uri } via resolveAssetSource breaks large feed
- * photos on web (black squares). Remote URLs still use { uri }.
+ * photos on web (black squares). Remote URLs use sized Storage transforms
+ * unless `size` is `'full'` (viewers / crop editor).
  */
 export function feedImageSource(
   photo: string | number | null | undefined,
+  size: DisplaySize = 'feed',
 ): ImageSourcePropType {
   if (typeof photo === 'number' && Number.isFinite(photo)) return photo;
-  if (typeof photo === 'string' && photo.trim()) return { uri: photo.trim() };
+  if (typeof photo === 'string' && photo.trim()) {
+    return { uri: storageDisplayUrl(photo.trim(), size) };
+  }
   return FEED_PHOTOS[0];
 }

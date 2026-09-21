@@ -7,6 +7,7 @@ import {
   Text,
   View,
   Alert,
+  useWindowDimensions,
   type ViewToken,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,7 +23,6 @@ import { colors, fonts } from '../../constants/theme';
 import type { AlbumPhoto, ChatProfile } from '../../data/chatTypes';
 import { chatRepo } from '../../lib/chat/repository';
 import { SwipeBackScreen } from '../../lib/gestures/useEdgeSwipeBack';
-import { getImageAspect } from '../../lib/feed/imageAspect';
 import { timeAgo } from '../../lib/feed/timeAgo';
 import { toImageSource } from '../../lib/images';
 import { PHONE_SAFE_INSETS, PHONE_WIDTH } from '../layout/PhoneShell';
@@ -37,17 +37,21 @@ interface AlbumPhotoViewerProps {
   onOpenProfile?: (user: ChatProfile) => void;
 }
 
-/** Instagram-style pinch/pan zoom over a photo that keeps its natural aspect ratio. */
+/**
+ * Pinch/pan zoom over a fixed viewport. Uses contain so the full photo is
+ * always visible (no auto crop / aspect framing).
+ */
 function ZoomableAlbumPhoto({
   imageUrl,
   width,
+  height,
   onZoomChange,
 }: {
   imageUrl: string | number;
   width: number;
+  height: number;
   onZoomChange?: (zoomed: boolean) => void;
 }) {
-  const [aspect, setAspect] = useState(() => 1); // width / height
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const tx = useSharedValue(0);
@@ -55,25 +59,16 @@ function ZoomableAlbumPhoto({
   const startTx = useSharedValue(0);
   const startTy = useSharedValue(0);
   const frameW = useSharedValue(width);
-  const frameH = useSharedValue(width);
+  const frameH = useSharedValue(height);
   const zoomedRef = useRef(false);
-
-  const height = Math.round(width / Math.max(0.01, aspect));
 
   useEffect(() => {
     frameW.value = width;
     frameH.value = height;
-  }, [width, height, frameW, frameH]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void getImageAspect(imageUrl).then((a) => {
-      if (!cancelled && a > 0) setAspect(a);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [imageUrl]);
+    scale.value = 1;
+    tx.value = 0;
+    ty.value = 0;
+  }, [width, height, imageUrl, frameW, frameH, scale, tx, ty]);
 
   const notifyZoom = useCallback(
     (s: number) => {
@@ -169,7 +164,7 @@ function ZoomableAlbumPhoto({
         <Animated.Image
           source={toImageSource(imageUrl)}
           style={[{ width, height }, animStyle]}
-          resizeMode="cover"
+          resizeMode="contain"
         />
       </View>
     </GestureDetector>
@@ -178,7 +173,7 @@ function ZoomableAlbumPhoto({
 
 /**
  * Instagram-style vertical pager for album photos.
- * Natural aspect ratios (white fill, no black letterbox); pinch / double-tap zoom.
+ * Fixed page height + contain so every photo scrolls freely and shows in full.
  */
 export function AlbumPhotoViewer({
   photos,
@@ -188,9 +183,14 @@ export function AlbumPhotoViewer({
   onOpenProfile,
 }: AlbumPhotoViewerProps) {
   const insets = useSafeAreaInsets();
+  const { height: winH } = useWindowDimensions();
   const topPad =
     (insets.top > 0 ? insets.top : Platform.OS === 'web' ? PHONE_SAFE_INSETS.top : 12) +
     4;
+  const topBarH = topPad + 44;
+  const pageH = Math.max(320, winH - topBarH);
+  /** Media slot leaves room for author row (~60) + actions (~52). */
+  const mediaH = Math.max(220, pageH - 120);
   const listRef = useRef<FlatList<AlbumPhoto>>(null);
   const [index, setIndex] = useState(initialIndex);
   const [zoomed, setZoomed] = useState(false);
@@ -311,8 +311,16 @@ export function AlbumPhotoViewer({
         keyExtractor={(p) => p.id}
         scrollEnabled={!zoomed}
         pagingEnabled
+        snapToInterval={pageH}
+        snapToAlignment="start"
+        disableIntervalMomentum
         decelerationRate="fast"
         showsVerticalScrollIndicator={false}
+        getItemLayout={(_data, i) => ({
+          length: pageH,
+          offset: pageH * i,
+          index: i,
+        })}
         onLayout={() => {
           if (initialIndex > 0) {
             requestAnimationFrame(() => {
@@ -336,7 +344,7 @@ export function AlbumPhotoViewer({
         renderItem={({ item }) => {
           const author = profiles[item.uploaderId];
           return (
-            <View style={styles.page}>
+            <View style={[styles.page, { height: pageH, width: PHONE_WIDTH }]}>
               <Pressable
                 style={styles.authorRow}
                 onPress={() => author && onOpenProfile?.(author)}
@@ -357,6 +365,7 @@ export function AlbumPhotoViewer({
               <ZoomableAlbumPhoto
                 imageUrl={item.imageUrl}
                 width={PHONE_WIDTH}
+                height={mediaH}
                 onZoomChange={setZoomed}
               />
 
@@ -531,6 +540,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     zIndex: 120,
     backgroundColor: colors.white,
+    overflow: 'hidden',
   },
   topBar: {
     flexDirection: 'row',
@@ -548,7 +558,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   page: {
-    paddingBottom: 28,
+    overflow: 'hidden',
   },
   authorRow: {
     flexDirection: 'row',

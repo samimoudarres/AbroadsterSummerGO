@@ -33,7 +33,9 @@ export type NotificationNav =
       channelId: string;
       communityId: string;
       slug?: string;
-    };
+    }
+  /** Monday weekly reminder → Trips, friends, this weekend only */
+  | { type: 'trips_weekend' };
 
 interface NotificationsScreenProps {
   onClose: () => void;

@@ -583,11 +583,12 @@ export function CreatePostScreen({
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator
+                  style={styles.templateScroll}
                   contentContainerStyle={styles.templateRow}
                 >
                   {COLLAGE_LAYOUTS.map((layout) => {
                     const selected = layout.id === layoutId;
-                    const tw = 72;
+                    const tw = 64;
                     return (
                       <Pressable
                         key={layout.id}
@@ -610,7 +611,7 @@ export function CreatePostScreen({
                           templateMode
                           showSlotNumbers
                         />
-                        <Text style={styles.templateLabel}>
+                        <Text style={styles.templateLabel} numberOfLines={1}>
                           {layout.label} · {layout.hint}
                         </Text>
                       </Pressable>
@@ -622,7 +623,7 @@ export function CreatePostScreen({
                     layoutId={layoutId}
                     photos={selectedPhotos}
                     crops={crops}
-                    width={Math.min(previewW, 200)}
+                    width={Math.min(previewW, 180)}
                     showPlaceholders
                     showSlotNumbers
                   />
@@ -1391,7 +1392,7 @@ const styles = StyleSheet.create({
   },
   topHalf: {
     paddingBottom: 8,
-    maxHeight: '42%',
+    flexShrink: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.divider,
   },
@@ -1403,14 +1404,21 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 6,
   },
+  /** Fixed height so the layout strip never collapses under the live preview. */
+  templateScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+    height: 118,
+  },
   templateRow: {
     paddingHorizontal: 12,
-    gap: 10,
+    gap: 8,
     alignItems: 'flex-end',
     paddingBottom: 4,
+    paddingRight: 20,
   },
   templateCard: {
-    width: 88,
+    width: 76,
     padding: 4,
     borderRadius: 10,
     borderWidth: 2,
@@ -1425,7 +1433,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 10,
     color: colors.textMuted,
-    maxWidth: 84,
+    maxWidth: 72,
   },
   carouselSlide: {
     borderRadius: 0,

@@ -1,5 +1,4 @@
 import { Platform } from 'react-native';
-import * as AgeRange from 'expo-age-range';
 
 export type AgeCheckReason =
   | 'under13'
@@ -32,6 +31,26 @@ export function markAgeAllowedThisSession(): void {
 
 export function resetAgeAllowedThisSession(): void {
   allowedThisSession = false;
+}
+
+function iosMajorVersion(): number {
+  if (Platform.OS !== 'ios') return 0;
+  const raw = Platform.Version;
+  if (typeof raw === 'number') return raw;
+  const parsed = parseInt(String(raw).split('.')[0] ?? '', 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * Declared Age Range needs iOS 26 + an Xcode 26-built binary.
+ * TestFlight builds on current EAS Xcode still hard-crash the process when the
+ * native module is invoked (JS try/catch cannot catch that). Keep disabled until
+ * EAS ships Xcode 26; signup birthday (≥13) remains the age gate.
+ */
+function supportsDeclaredAgeRangeNative(): boolean {
+  return false;
+  // Re-enable when production binaries are built with Xcode 26+:
+  // return Platform.OS === 'ios' && iosMajorVersion() >= 26;
 }
 
 function errorCode(error: unknown): string {
@@ -85,24 +104,39 @@ function mapThrownError(error: unknown): AgeCheckResult {
 
 async function requestIosAgeRange(): Promise<AgeCheckResult> {
   try {
-    const range = await AgeRange.requestAgeRangeAsync({
-      threshold1: MIN_AGE,
-    });
+    // Dynamic import — never load the native module during cold start on iOS < 26.
+    const AgeRange = await import('expo-age-range');
+    const range = await Promise.race([
+      AgeRange.requestAgeRangeAsync({ threshold1: MIN_AGE }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('age-range-timeout')), 3500),
+      ),
+    ]);
     const result = interpretAgeRange(range.lowerBound, range.upperBound);
     if (result.ok) markAgeAllowedThisSession();
     return result;
   } catch (error) {
+    // Fail open on timeouts / native module faults so launch never hard-locks.
+    if (errorMessage(error).includes('age-range-timeout')) {
+      markAgeAllowedThisSession();
+      return { ok: true };
+    }
     return mapThrownError(error);
   }
 }
 
 /**
  * Confirm the user may use social features (13+).
- * iOS: Apple Declared Age Range. Android/web: skip (birthday gate covers signup).
+ * iOS 26+: Apple Declared Age Range (dynamic import).
+ * Older iOS / Android / web: allow — birthday gate already covers signup.
  */
 export async function ensureAgeAllowedForSocial(): Promise<AgeCheckResult> {
   if (allowedThisSession) return { ok: true };
   if (Platform.OS !== 'ios') return { ok: true };
+  if (!supportsDeclaredAgeRangeNative()) {
+    markAgeAllowedThisSession();
+    return { ok: true };
+  }
   if (inFlight) return inFlight;
 
   inFlight = requestIosAgeRange().finally(() => {

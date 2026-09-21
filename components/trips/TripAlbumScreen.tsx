@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
-import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '../../constants/theme';
 import type { AlbumPhoto, ChatProfile, ChatTrip } from '../../data/chatTypes';
@@ -28,7 +27,7 @@ import {
   pickExtraFromLibrary,
   saveUriToLibrary,
 } from '../../lib/feed/galleryAssets';
-import { SwipeBackScreen, useEdgeSwipeBack } from '../../lib/gestures/useEdgeSwipeBack';
+import { SwipeBackScreen } from '../../lib/gestures/useEdgeSwipeBack';
 import { shortCalendarRange } from '../../lib/trips/dates';
 import { buildTripInviteShareMessage } from '../../lib/trips/inviteLinks';
 import {
@@ -39,8 +38,10 @@ import {
 } from '../../lib/trips/status';
 import { presentLocalNotification } from '../../lib/trips/push';
 import { ensureImageUri, toImageSource } from '../../lib/images';
-import { PHONE_SAFE_INSETS } from '../layout/PhoneShell';
+import { storageDisplayUrl } from '../../lib/images/displayUrl';
+import { PHONE_SAFE_INSETS, PHONE_WIDTH } from '../layout/PhoneShell';
 import { Avatar } from '../common/Avatar';
+import { CachedImage } from '../common/CachedImage';
 import { ConfirmTripSlider } from './ConfirmTripSlider';
 import { AlbumPhotoViewer } from './AlbumPhotoViewer';
 import { InviteTravelersSheet } from './InviteTravelersSheet';
@@ -87,7 +88,6 @@ export function TripAlbumScreen({
   onOpenTripChat,
 }: TripAlbumScreenProps) {
   const insets = useSafeAreaInsets();
-  const edgeBack = useEdgeSwipeBack(onClose);
   const topPad =
     (insets.top > 0 ? insets.top : Platform.OS === 'web' ? PHONE_SAFE_INSETS.top : 12) +
     6;
@@ -120,10 +120,20 @@ export function TripAlbumScreen({
   const scrollRef = useRef<ScrollView>(null);
   const scrollYRef = useRef(0);
   const gridTopRef = useRef(0);
+  const lastWindowScrollRef = useRef(0);
+  const [scrollY, setScrollY] = useState(0);
+  const [viewportH, setViewportH] = useState(700);
+  const [galleryW, setGalleryW] = useState(PHONE_WIDTH);
   const tileLayouts = useRef<Record<string, { x: number; y: number; w: number; h: number }>>(
     {},
   );
   const dragSelectingRef = useRef(false);
+
+  // Always 3 columns based on the real gallery width (avoids 2-col wrap on web).
+  const tileW = Math.max(
+    1,
+    Math.floor((galleryW - GAP * (GRID - 1)) / GRID),
+  );
 
   const isOwner = trip ? isOwnSender(trip.ownerId, meId) : false;
   const isMember = trip ? isTripParticipant(trip, meId) : false;
@@ -152,14 +162,52 @@ export function TripAlbumScreen({
     const me = await chatRepo.getMe();
     const demoMe = await demoChat.getMe();
     setMeId(me.id);
-    const t = await chatRepo.getTrip(tripId);
+
+    // Trip + album photos first so the grid can paint without waiting on members.
+    const [t, albumPhotos] = await Promise.all([
+      chatRepo.getTrip(tripId),
+      chatRepo.getTripAlbumPhotos(tripId),
+    ]);
     if (!t) return;
     setTrip(t);
     setJoinRequested(t.myJoinStatus === 'pending');
 
-    const memberProfiles = (
-      await Promise.all(t.memberIds.map((id) => chatRepo.getProfile(id)))
-    ).filter(Boolean) as ChatProfile[];
+    // Remote http URLs are already usable — don't block the grid on uri resolve.
+    setPhotos(albumPhotos);
+    const thumbUrls = albumPhotos
+      .map((ph) =>
+        typeof ph.imageUrl === 'string'
+          ? storageDisplayUrl(ph.imageUrl, 'grid')
+          : '',
+      )
+      .filter((u) => /^https?:\/\//i.test(u));
+    if (thumbUrls.length) {
+      for (const u of thumbUrls.slice(0, 30)) {
+        void Image.prefetch(u).catch(() => {});
+      }
+      void import('expo-image')
+        .then(({ Image: ExpoImage }) => ExpoImage.prefetch(thumbUrls.slice(0, 40)))
+        .catch(() => {});
+    }
+
+    // Likes only matter in the full-screen viewer — hydrate after first paint.
+    void chatRepo
+      .getTripAlbumPhotos(tripId, { withLikes: true })
+      .then((withLikes) => {
+        if (withLikes.length) setPhotos(withLikes);
+      })
+      .catch(() => {});
+
+    const resolvedPhotos = albumPhotos;
+
+    const pendingIds = t.pendingInviteeIds ?? [];
+    const [memberProfilesRaw, pendingProfilesRaw, reqs] = await Promise.all([
+      Promise.all(t.memberIds.map((id) => chatRepo.getProfile(id))),
+      Promise.all(pendingIds.map((id) => chatRepo.getProfile(id))),
+      chatRepo.listTripJoinRequests(tripId).catch(() => []),
+    ]);
+
+    const memberProfiles = memberProfilesRaw.filter(Boolean) as ChatProfile[];
     const resolvedMembers = await Promise.all(
       memberProfiles.map((p) =>
         withResolvedAvatar(p, isOwnSender(p.id, me.id) ? demoMe : null),
@@ -167,16 +215,14 @@ export function TripAlbumScreen({
     );
     setMembers(resolvedMembers);
 
-    const pendingIds = t.pendingInviteeIds ?? [];
-    const pendingProfiles = (
-      await Promise.all(pendingIds.map((id) => chatRepo.getProfile(id)))
-    ).filter(Boolean) as ChatProfile[];
-    setPending(await Promise.all(pendingProfiles.map((p) => withResolvedAvatar(p))));
+    const pendingProfiles = pendingProfilesRaw.filter(Boolean) as ChatProfile[];
+    setPending(
+      await Promise.all(pendingProfiles.map((p) => withResolvedAvatar(p))),
+    );
 
     try {
-      const reqs = await chatRepo.listTripJoinRequests(tripId);
       const withProfiles = await Promise.all(
-        reqs.map(async (r) => {
+        (reqs as Array<{ id: string; requesterId: string }>).map(async (r) => {
           const p = await chatRepo.getProfile(r.requesterId);
           return {
             id: r.id,
@@ -190,29 +236,15 @@ export function TripAlbumScreen({
       setJoinRequests([]);
     }
 
-    const albumPhotos = await chatRepo.getTripAlbumPhotos(tripId);
-    const resolvedPhotos = await Promise.all(
-      albumPhotos.map(async (ph) => {
-        try {
-          return {
-            ...ph,
-            imageUrl: await ensureImageUri(ph.imageUrl as any),
-          };
-        } catch {
-          return ph;
-        }
-      }),
-    );
-    setPhotos(resolvedPhotos);
-
     const map: Record<string, ChatProfile> = {};
     for (const m of resolvedMembers) map[m.id] = m;
-    for (const ph of resolvedPhotos) {
-      if (!map[ph.uploaderId]) {
+    await Promise.all(
+      resolvedPhotos.map(async (ph) => {
+        if (map[ph.uploaderId]) return;
         const p = await chatRepo.getProfile(ph.uploaderId);
         if (p) map[ph.uploaderId] = await withResolvedAvatar(p);
-      }
-    }
+      }),
+    );
     setProfiles(map);
   }, [tripId]);
 
@@ -245,7 +277,7 @@ export function TripAlbumScreen({
   }, [inviteQuery, isMember, trip?.memberIds, trip?.pendingInviteeIds]);
 
   const pickPhotos = async () => {
-    const assets = await pickExtraFromLibrary(150);
+    const assets = await pickExtraFromLibrary(100);
     if (!assets.length) {
       Alert.alert(
         'Photos',
@@ -256,7 +288,10 @@ export function TripAlbumScreen({
     const uris = assets
       .map((a) => (typeof a.uri === 'string' ? a.uri : ''))
       .filter(Boolean);
-    setPendingUris((prev) => [...prev, ...uris]);
+    setPendingUris((prev) => {
+      const room = Math.max(0, 100 - prev.length);
+      return [...prev, ...uris.slice(0, room)];
+    });
   };
 
   const confirmUpload = async () => {
@@ -442,13 +477,13 @@ export function TripAlbumScreen({
     );
   }
 
-  const selectAtPoint = (x: number, y: number) => {
+  const selectAtPoint = (pageX: number, pageY: number) => {
     for (const [id, box] of Object.entries(tileLayouts.current)) {
       if (
-        x >= box.x &&
-        x <= box.x + box.w &&
-        y >= box.y &&
-        y <= box.y + box.h
+        pageX >= box.x &&
+        pageX <= box.x + box.w &&
+        pageY >= box.y &&
+        pageY <= box.y + box.h
       ) {
         setSelectedIds((prev) => {
           if (prev.has(id)) return prev;
@@ -523,7 +558,7 @@ export function TripAlbumScreen({
       : null;
 
   return (
-    <GestureDetector gesture={edgeBack}>
+    <SwipeBackScreen onClose={onClose}>
     <View style={styles.root}>
       <View style={[styles.wash, { height: topPad + 110 }]} />
       <View style={[styles.header, { paddingTop: topPad }]}>
@@ -576,9 +611,17 @@ export function TripAlbumScreen({
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
         onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-          scrollYRef.current = e.nativeEvent.contentOffset.y;
+          const y = e.nativeEvent.contentOffset.y;
+          scrollYRef.current = y;
+          if (Math.abs(y - lastWindowScrollRef.current) >= 64) {
+            lastWindowScrollRef.current = y;
+            setScrollY(y);
+          }
         }}
-        scrollEventThrottle={16}
+        scrollEventThrottle={32}
+        onLayout={(e) => {
+          setViewportH(e.nativeEvent.layout.height);
+        }}
       >
         <View style={styles.heroCard}>
           <View style={styles.placeRow}>
@@ -820,9 +863,10 @@ export function TripAlbumScreen({
                 >
                   {pendingUris.map((uri, i) => (
                     <View key={`${uri}-${i}`} style={styles.pendingThumbWrap}>
-                      <Image
-                        source={toImageSource(uri)}
+                      <CachedImage
+                        source={toImageSource(uri) as any}
                         style={styles.pendingThumb}
+                        contentFit="cover"
                       />
                       <Pressable
                         style={styles.pendingRemove}
@@ -891,17 +935,19 @@ export function TripAlbumScreen({
           style={styles.gallery}
           onLayout={(e) => {
             gridTopRef.current = e.nativeEvent.layout.y;
+            const w = e.nativeEvent.layout.width;
+            if (w > 0 && Math.abs(w - galleryW) > 1) setGalleryW(w);
           }}
           onStartShouldSetResponder={() => selectMode && isMember}
           onMoveShouldSetResponder={() => selectMode && isMember}
           onResponderGrant={(e) => {
             if (!selectMode || !isMember) return;
             dragSelectingRef.current = true;
-            selectAtPoint(e.nativeEvent.locationX, e.nativeEvent.locationY);
+            selectAtPoint(e.nativeEvent.pageX, e.nativeEvent.pageY);
           }}
           onResponderMove={(e) => {
             if (!dragSelectingRef.current) return;
-            selectAtPoint(e.nativeEvent.locationX, e.nativeEvent.locationY);
+            selectAtPoint(e.nativeEvent.pageX, e.nativeEvent.pageY);
             const y = e.nativeEvent.pageY;
             if (y < 140) {
               scrollRef.current?.scrollTo({
@@ -933,24 +979,46 @@ export function TripAlbumScreen({
             <View style={styles.grid}>
               {photos.map((ph, i) => {
                 const selected = selectedIds.has(ph.id);
+                const row = Math.floor(i / GRID);
+                const rowH = tileW + GAP;
+                const firstVisibleRow = Math.max(
+                  0,
+                  Math.floor((scrollY - gridTopRef.current) / rowH) - 2,
+                );
+                const lastVisibleRow =
+                  firstVisibleRow + Math.ceil(viewportH / Math.max(rowH, 1)) + 4;
+                const near = row >= firstVisibleRow && row <= lastVisibleRow;
                 return (
                   <Pressable
                     key={ph.id}
                     style={[
                       styles.tile,
                       {
-                        width: `${100 / GRID}%`,
-                        padding: GAP / 2,
+                        width: tileW,
+                        height: tileW,
+                        marginRight: (i + 1) % GRID === 0 ? 0 : GAP,
+                        marginBottom: GAP,
                       },
                     ]}
                     onLayout={(e: LayoutChangeEvent) => {
-                      const { x, y, width, height } = e.nativeEvent.layout;
-                      tileLayouts.current[ph.id] = {
-                        x,
-                        y,
-                        w: width,
-                        h: height,
+                      const node = e.target as unknown as {
+                        measureInWindow?: (
+                          cb: (x: number, y: number, w: number, h: number) => void,
+                        ) => void;
                       };
+                      if (typeof node?.measureInWindow === 'function') {
+                        node.measureInWindow((x, y, w, h) => {
+                          tileLayouts.current[ph.id] = { x, y, w, h };
+                        });
+                      } else {
+                        const { x, y, width, height } = e.nativeEvent.layout;
+                        tileLayouts.current[ph.id] = {
+                          x,
+                          y,
+                          w: width,
+                          h: height,
+                        };
+                      }
                     }}
                     onLongPress={() => {
                       if (!isMember) return;
@@ -977,11 +1045,23 @@ export function TripAlbumScreen({
                         selected && styles.tileInnerSelected,
                       ]}
                     >
-                      <Image
-                        source={toImageSource(ph.imageUrl)}
-                        style={styles.tileImg}
-                        resizeMode="cover"
-                      />
+                      {near ? (
+                        <CachedImage
+                          source={
+                            toImageSource(
+                              typeof ph.imageUrl === 'string'
+                                ? storageDisplayUrl(ph.imageUrl, 'grid')
+                                : ph.imageUrl,
+                            ) as any
+                          }
+                          style={styles.tileImg}
+                          contentFit="cover"
+                          recyclingKey={ph.id}
+                          priority="low"
+                        />
+                      ) : (
+                        <View style={[styles.tileImg, { backgroundColor: '#111' }]} />
+                      )}
                       {selectMode && isMember ? (
                         <View
                           style={[
@@ -1170,7 +1250,7 @@ export function TripAlbumScreen({
         }}
       />
     </View>
-    </GestureDetector>
+    </SwipeBackScreen>
   );
 
   async function inviteUser(user: ChatProfile) {

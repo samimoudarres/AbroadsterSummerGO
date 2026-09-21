@@ -175,22 +175,6 @@ export function WelcomeScreen({ onCreateAccount, onLogin }: WelcomeScreenProps) 
           Share the moments.
         </Text>
 
-        <Text
-          style={[
-            styles.ageNote,
-            {
-              marginTop: 10 * sy,
-              width: 307 * sx,
-              fontSize: 11 * st,
-              lineHeight: 15 * st,
-            },
-          ]}
-        >
-          {Platform.OS === 'ios'
-            ? 'Abroadster is for ages 13+. Age is checked with Apple Declared Age Range.'
-            : 'Abroadster is for ages 13+. Age is verified during sign-up.'}
-        </Text>
-
         <Pressable
           onPress={onCreateAccount}
           accessibilityRole="button"
@@ -200,7 +184,7 @@ export function WelcomeScreen({ onCreateAccount, onLogin }: WelcomeScreenProps) 
             {
               width: btnW,
               height: btnH,
-              marginTop: 20 * sy,
+              marginTop: 28 * sy,
               borderRadius: 100,
             },
             pressed && styles.btnPressed,
@@ -324,11 +308,6 @@ const styles = StyleSheet.create({
   tagline: {
     fontFamily: fonts.regular,
     color: colors.white,
-    textAlign: 'center',
-  },
-  ageNote: {
-    fontFamily: fonts.regular,
-    color: 'rgba(255,255,255,0.88)',
     textAlign: 'center',
   },
   btnCreate: {
