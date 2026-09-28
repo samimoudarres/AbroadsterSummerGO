@@ -68,6 +68,7 @@ You’ll get a URL like `https://abroadster-xxxx.vercel.app`.
 |------|---------|
 | `/` | Home |
 | `/features` | Product features + app frames |
+| `/postcard-studio` | Vintage postcard collage studio (browser-only) |
 | `/contact` | Contact form |
 | `/privacy` | Redirects to hosted Privacy Policy |
 | `/terms` | Redirects to hosted Terms |

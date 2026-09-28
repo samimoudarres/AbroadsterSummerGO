@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "tsx --test features/postcard-studio/tests/**/*.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",
@@ -24,6 +25,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.23",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

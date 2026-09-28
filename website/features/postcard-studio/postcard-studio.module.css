@@ -1,0 +1,463 @@
+.page {
+  padding-bottom: 4rem;
+}
+
+.hero {
+  padding: 2rem 0 1.25rem;
+  display: grid;
+  gap: 0.75rem;
+  max-width: 46rem;
+}
+
+.kicker {
+  display: inline-block;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+  font-weight: 700;
+}
+
+.lede {
+  margin: 0;
+  color: var(--muted);
+  max-width: 40rem;
+}
+
+.privacy {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  background: rgba(23, 88, 100, 0.08);
+  border: 1px solid rgba(23, 88, 100, 0.18);
+  border-radius: 10px;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.how {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.25rem 0 1.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.howCard {
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(59, 73, 82, 0.15);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.howCard strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--teal);
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.stageWrap {
+  position: relative;
+  background: rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(59, 73, 82, 0.16);
+  border-radius: 16px;
+  padding: 1rem;
+  touch-action: none;
+}
+
+.stageScaler {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  aspect-ratio: 9 / 16;
+  position: relative;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  width: 1080px;
+  height: 1920px;
+  transform-origin: top left;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 18px 40px rgba(40, 30, 20, 0.22);
+  background: #f3ddc5;
+}
+
+.stage.previewMode .handle,
+.stage.previewMode .selectedRing {
+  display: none !important;
+}
+
+.paperCream {
+  background: #f3ddc5;
+}
+.paperIvory {
+  background: #f7ecd8;
+}
+.paperKraft {
+  background: #d8c3a3;
+}
+
+.titleLayer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 430px;
+  z-index: 20;
+  pointer-events: none;
+  text-align: center;
+}
+
+.greetings {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 42px;
+  color: rgba(120, 55, 45, 0.85);
+  margin-bottom: 8px;
+}
+
+.bigWord {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 0 24px;
+  line-height: 0.9;
+}
+
+.letter {
+  position: relative;
+  display: inline-block;
+  font-family: Impact, Haettenschweiler, 'Arial Black', sans-serif;
+  font-weight: 900;
+  font-size: clamp(64px, 12vw, 160px);
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 3px #1e1a16;
+  text-shadow:
+    3px 4px 0 rgba(200, 80, 50, 0.55),
+    -1px -1px 0 rgba(250, 240, 220, 0.85);
+  background-size: cover;
+  background-position: center;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.card {
+  position: absolute;
+  background: #faf6ef;
+  box-shadow: 4px 10px 22px rgba(40, 30, 20, 0.28);
+  cursor: default;
+  user-select: none;
+  touch-action: none;
+}
+
+.cardPolaroid {
+  padding: 14px 14px 42px;
+}
+.cardThin {
+  padding: 10px;
+}
+.cardThick {
+  padding: 18px 18px 28px;
+}
+
+.cardInner {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  background: #ddd;
+  cursor: grab;
+}
+
+.cardInner:active {
+  cursor: grabbing;
+}
+
+.cardImg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  pointer-events: none;
+  transform-origin: center center;
+}
+
+.selectedRing {
+  outline: 3px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.handle {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--teal);
+  border: 2px solid #fff;
+  z-index: 5;
+}
+
+.moveHandle {
+  top: -14px;
+  left: 50%;
+  margin-left: -14px;
+  cursor: move;
+}
+
+.rotateHandle {
+  bottom: -14px;
+  left: 50%;
+  margin-left: -14px;
+  cursor: grab;
+}
+
+.tape {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 96px;
+  height: 22px;
+  margin-left: -48px;
+  opacity: 0.75;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.tapeTan {
+  background: rgba(210, 180, 140, 0.85);
+}
+.tapeMint {
+  background: rgba(160, 200, 180, 0.85);
+}
+.tapeCoral {
+  background: rgba(230, 140, 120, 0.85);
+}
+
+.vignette {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: radial-gradient(
+    circle at center,
+    transparent 40%,
+    rgba(30, 20, 10, 0.35) 100%
+  );
+}
+
+.grainOverlay {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 51;
+  opacity: 0.25;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.warmth {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 49;
+  background: rgba(210, 140, 70, 0.12);
+}
+
+.panel {
+  display: grid;
+  gap: 1rem;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(59, 73, 82, 0.16);
+  border-radius: 16px;
+  padding: 1rem;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--teal);
+}
+
+.field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.field label {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.field input[type='text'],
+.field select {
+  width: 100%;
+  border: 1px solid rgba(59, 73, 82, 0.25);
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  background: #fff;
+  color: var(--ink);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid rgba(23, 88, 100, 0.35);
+  background: #fff;
+  color: var(--teal);
+  border-radius: 999px;
+  padding: 0.55rem 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btnPrimary {
+  background: var(--teal);
+  color: #fff;
+  border-color: var(--teal);
+}
+
+.btnDanger {
+  color: #8b2e2e;
+  border-color: rgba(139, 46, 46, 0.35);
+}
+
+.chip {
+  border-radius: 999px;
+  border: 1px solid rgba(23, 88, 100, 0.3);
+  background: #fff;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.chipOn {
+  background: var(--teal);
+  color: #fff;
+  border-color: var(--teal);
+}
+
+.drop {
+  border: 2px dashed rgba(23, 88, 100, 0.35);
+  border-radius: 12px;
+  padding: 1rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.dropActive {
+  border-color: var(--teal);
+  background: rgba(23, 88, 100, 0.08);
+}
+
+.film {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 2px solid transparent;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.thumbOn {
+  border-color: var(--teal);
+}
+
+.thumbUnused {
+  opacity: 0.55;
+}
+
+.err {
+  color: #8b2e2e;
+  font-size: 0.92rem;
+  margin: 0;
+}
+
+.ok {
+  color: var(--teal);
+  font-size: 0.92rem;
+  margin: 0;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.sliderRow {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.sliderRow input[type='range'] {
+  width: 100%;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+@media (max-width: 960px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .how {
+    grid-template-columns: 1fr;
+  }
+
+  .stageScaler {
+    max-width: 340px;
+  }
+}
+
+@media (max-width: 430px) {
+  .stageScaler {
+    max-width: 300px;
+  }
+
+  .hero {
+    padding-top: 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}

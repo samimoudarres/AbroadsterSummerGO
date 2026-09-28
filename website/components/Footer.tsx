@@ -37,6 +37,7 @@ export function Footer() {
             <h3 className="type-bold">Explore</h3>
             <Link href="/">Home</Link>
             <Link href="/features">How it works</Link>
+            <Link href="/postcard-studio">Postcard Studio</Link>
             <Link href="/#about">About</Link>
             <Link href="/contact">Contact</Link>
           </div>

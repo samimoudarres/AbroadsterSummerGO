@@ -9,6 +9,7 @@ import styles from './Nav.module.css';
 
 const links = [
   { href: '/features', label: 'How it works' },
+  { href: '/postcard-studio', label: 'Postcard Studio' },
   { href: '/#about', label: 'About' },
   { href: '/contact', label: 'Contact' },
 ];
@@ -36,9 +37,11 @@ export function Nav() {
             const active =
               l.href === '/features'
                 ? pathname === '/features'
-                : l.href === '/contact'
-                  ? pathname === '/contact'
-                  : false;
+                : l.href === '/postcard-studio'
+                  ? pathname === '/postcard-studio'
+                  : l.href === '/contact'
+                    ? pathname === '/contact'
+                    : false;
             return (
               <Link
                 key={l.href}
