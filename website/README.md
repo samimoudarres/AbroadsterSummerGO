@@ -41,6 +41,24 @@ There is **no** `mailto:` fallback — your support address stays server-side on
 
 Run migration `053_contact_tickets.sql` in the Supabase SQL editor before relying on the form in production.
 
+## Postcard Studio
+
+Route: `/postcard-studio`
+
+Photos are processed in the browser (IndexedDB). They are never sent to Recraft or any AI image model.
+
+Optional server env vars for destination letter-fill art:
+
+```bash
+NEXT_PUBLIC_POSTCARD_STUDIO_ENABLED=true
+POSTCARD_AI_ENABLED=false
+RECRAFT_API_KEY=
+RECRAFT_STYLE_ID=
+POSTCARD_STYLE_VERSION=v1
+```
+
+Keep `POSTCARD_AI_ENABLED=false` until you intentionally turn Recraft on. The studio always works with built-in vintage fallback art.
+
 ## Deploy free on Vercel
 
 From `website/`:
