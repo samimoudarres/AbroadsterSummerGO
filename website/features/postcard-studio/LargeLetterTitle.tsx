@@ -1,27 +1,29 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import type { PhotoRecord, TitleVariant } from './types';
+import type { TitleVariant } from './types';
 import { POSTCARD_WIDTH } from './types';
+import { regionLabelFor } from './destinationPresets';
 import styles from './postcard-studio.module.css';
 
 type Props = {
   text: string;
+  /** Per-letter landmark vignettes (preset / generated) */
+  letterFills: string[];
+  /** Wide art fallback if a letter lacks a vignette */
   artUrl: string | null;
-  /** Cycle trip photos as secondary letter fills when art is thin */
-  photos: PhotoRecord[];
   greetingsFrom: boolean;
   titleVariant: TitleVariant;
 };
 
 /**
- * Mid-century "large letter" title: arched, chunky 3D, each glyph filled
- * with destination art (and trip photos as alternate slices) — never AI-spelled.
+ * Mid-century large-letter title: arched block glyphs, mustard 3D extrusion,
+ * cursive “Greetings”, region label — landmark fills, never AI-spelled text.
  */
 export function LargeLetterTitle({
   text,
+  letterFills,
   artUrl,
-  photos,
   greetingsFrom,
   titleVariant,
 }: Props) {
@@ -29,10 +31,10 @@ export function LargeLetterTitle({
   const chars = display.split('');
   const letterCount = chars.filter((c) => c !== ' ').length;
   const long = display.replace(/\s/g, '').length;
+  const region = regionLabelFor(text);
 
-  // Dominate the 9:16 canvas — classic large-letter scale
   const fontSize =
-    long > 14 ? 132 : long > 11 ? 158 : long > 8 ? 188 : long > 5 ? 228 : 268;
+    long > 14 ? 118 : long > 11 ? 142 : long > 8 ? 172 : long > 5 ? 210 : 248;
 
   let letterIndex = 0;
 
@@ -66,23 +68,16 @@ export function LargeLetterTitle({
           const idx = letterIndex++;
           const mid = (letterCount - 1) / 2;
           const t = letterCount <= 1 ? 0 : (idx - mid) / Math.max(mid, 1);
-          // Stronger arc + diagonal path (hand-set large-letter feel)
-          const slantExtra = titleVariant === 'slant' ? t * 6 : 0;
-          const rot = t * 14 + slantExtra + (idx % 2 === 0 ? -1.5 : 1.2);
-          const lift = -Math.abs(t) * 36 + (1 - Math.abs(t)) * 52;
-          const scaleJitter = 1 + ((idx * 17) % 7) * 0.012 - 0.03;
+          // Seaside / LA path: rising diagonal arc
+          const slantExtra = titleVariant === 'slant' ? t * 5 : 0;
+          const rot = t * 12 + slantExtra;
+          const lift = -Math.abs(t) * 42 + (1 - Math.abs(t)) * 58 + t * 18;
 
-          // Destination art first (landmark fills); trip photos as alternates
-          const photo = photos.length ? photos[idx % photos.length] : null;
-          const usePhotoSlice = !artUrl || idx % 3 === 2;
           const fillUrl =
-            (usePhotoSlice ? photo?.objectUrl : null) ||
+            letterFills[idx] ||
+            letterFills[idx % Math.max(letterFills.length, 1)] ||
             artUrl ||
-            photo?.objectUrl ||
             undefined;
-          const bgPos = `${(idx / Math.max(letterCount - 1, 1)) * 100}% ${
-            30 + (idx % 3) * 18
-          }%`;
 
           return (
             <span
@@ -90,14 +85,17 @@ export function LargeLetterTitle({
               className={styles.blockLetter}
               style={
                 {
-                  transform: `translateY(${lift}px) rotate(${rot}deg) scale(${scaleJitter})`,
+                  transform: `translateY(${lift}px) rotate(${rot}deg)`,
                   '--fill-image': fillUrl ? `url(${fillUrl})` : 'none',
-                  '--fill-pos': bgPos,
+                  '--fill-pos': '50% 45%',
                   zIndex: 10 + idx,
                 } as CSSProperties
               }
               data-letter={ch}
             >
+              <span className={styles.blockLetterExtrude} aria-hidden>
+                {ch}
+              </span>
               <span className={styles.blockLetterDepth} aria-hidden>
                 {ch}
               </span>
@@ -109,6 +107,8 @@ export function LargeLetterTitle({
           );
         })}
       </div>
+
+      {region ? <div className={styles.regionLabel}>{region}</div> : null}
 
       <div className={styles.titleWidthGuard} style={{ width: POSTCARD_WIDTH }} />
     </div>

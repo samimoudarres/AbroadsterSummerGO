@@ -1,4 +1,6 @@
 import { coverFit } from './cropMath';
+import { regionLabelFor } from './destinationPresets';
+import { createLetterFillVignettes } from './fallbackArt';
 import type { CardState, PhotoRecord, PostcardProject, StyleSettings } from './types';
 import { POSTCARD_HEIGHT, POSTCARD_WIDTH } from './types';
 
@@ -102,29 +104,62 @@ function drawTape(
   ctx.restore();
 }
 
+function drawBleedUnderlay(
+  ctx: CanvasRenderingContext2D,
+  photoImgs: HTMLImageElement[],
+) {
+  if (!photoImgs.length) return;
+  const cols = 2;
+  const cells = Math.max(6, Math.min(photoImgs.length * 2, 12));
+  const rows = Math.ceil(cells / cols);
+  const cellW = POSTCARD_WIDTH / cols;
+  const cellH = POSTCARD_HEIGHT / rows;
+  for (let i = 0; i < cells; i++) {
+    const img = photoImgs[i % photoImgs.length];
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = col * cellW - 12;
+    const y = row * cellH - 12;
+    const w = cellW + 24;
+    const h = cellH + 24;
+    const { drawW, drawH } = coverFit(
+      img.naturalWidth,
+      img.naturalHeight,
+      w,
+      h,
+    );
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    ctx.drawImage(img, x + (w - drawW) / 2, y + (h - drawH) / 2, drawW, drawH);
+    ctx.restore();
+  }
+}
+
 function drawLargeLetters(
   ctx: CanvasRenderingContext2D,
   text: string,
+  letterFillImgs: HTMLImageElement[],
   art: HTMLImageElement | null,
-  photoImgs: HTMLImageElement[],
   style: StyleSettings,
 ) {
   const display = text.toUpperCase() || 'YOUR PLACE';
   if (style.greetingsFrom) {
     ctx.save();
-    ctx.translate(POSTCARD_WIDTH / 2, 360);
-    ctx.rotate((-3 * Math.PI) / 180);
+    ctx.translate(POSTCARD_WIDTH / 2 - 20, 300);
+    ctx.rotate((-4 * Math.PI) / 180);
     ctx.textAlign = 'center';
-    ctx.font = 'italic 700 58px Georgia, "Segoe Script", cursive';
-    ctx.lineWidth = 5;
+    ctx.font = '400 88px "Great Vibes", "Segoe Script", cursive';
+    ctx.lineWidth = 4;
     ctx.strokeStyle = '#14110e';
     ctx.fillStyle = '#f2d24b';
-    ctx.strokeText('Greetings', -40, 0);
-    ctx.fillText('Greetings', -40, 0);
-    ctx.font = 'italic 700 32px Georgia, serif';
+    ctx.strokeText('Greetings', -30, 0);
+    ctx.fillText('Greetings', -30, 0);
+    ctx.font = 'italic 700 30px Georgia, serif';
     ctx.fillStyle = '#c62828';
-    ctx.strokeText('from', 130, 8);
-    ctx.fillText('from', 130, 8);
+    ctx.strokeText('from', 150, 18);
+    ctx.fillText('from', 150, 18);
     ctx.restore();
   }
 
@@ -132,15 +167,15 @@ function drawLargeLetters(
   const letterOnly = letters.filter((c) => c !== ' ');
   const long = letterOnly.length;
   let size =
-    long > 14 ? 128 : long > 11 ? 152 : long > 8 ? 182 : long > 5 ? 218 : 255;
+    long > 14 ? 118 : long > 11 ? 140 : long > 8 ? 168 : long > 5 ? 205 : 240;
 
-  ctx.font = `900 ${size}px Impact, Haettenschweiler, "Arial Black", sans-serif`;
-  while (ctx.measureText(display).width > POSTCARD_WIDTH - 24 && size > 80) {
+  ctx.font = `400 ${size}px Anton, Impact, Haettenschweiler, "Arial Black", sans-serif`;
+  while (ctx.measureText(display).width > POSTCARD_WIDTH - 20 && size > 78) {
     size -= 4;
-    ctx.font = `900 ${size}px Impact, Haettenschweiler, "Arial Black", sans-serif`;
+    ctx.font = `400 ${size}px Anton, Impact, Haettenschweiler, "Arial Black", sans-serif`;
   }
 
-  const baseY = 640;
+  const baseY = 620;
   const totalW = ctx.measureText(display).width;
   let x = (POSTCARD_WIDTH - totalW) / 2;
   let li = 0;
@@ -148,78 +183,80 @@ function drawLargeLetters(
   for (let i = 0; i < letters.length; i++) {
     const ch = letters[i];
     if (ch === ' ') {
-      x += ctx.measureText(' ').width;
+      x += ctx.measureText(' ').width * 0.7;
       continue;
     }
     const mid = (long - 1) / 2;
     const t = long <= 1 ? 0 : (li - mid) / Math.max(mid, 1);
-    const rot = t * 14 + (li % 2 === 0 ? -1.5 : 1.2);
-    const lift = -Math.abs(t) * 36 + (1 - Math.abs(t)) * 52;
+    const rot = t * 12;
+    const lift = -Math.abs(t) * 42 + (1 - Math.abs(t)) * 58 + t * 18;
     const cw = ctx.measureText(ch).width;
-    const letterSize = size * (1 + ((li * 17) % 7) * 0.012 - 0.03);
 
     ctx.save();
     ctx.translate(x + cw / 2, baseY + lift);
     ctx.rotate((rot * Math.PI) / 180);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `900 ${letterSize}px Impact, Haettenschweiler, "Arial Black", sans-serif`;
+    ctx.font = `400 ${size}px Anton, Impact, Haettenschweiler, "Arial Black", sans-serif`;
 
-    // Deep 3D extrusion (terracotta)
-    ctx.fillStyle = '#b84a1c';
-    ctx.fillText(ch, 12, 14);
-    ctx.fillStyle = '#d4622e';
+    // Mustard extrusion (Seaside / LA)
+    ctx.fillStyle = '#c9a028';
+    ctx.fillText(ch, 14, 16);
+    ctx.fillStyle = '#8a3210';
     ctx.fillText(ch, 7, 8);
 
-    // Thick black outline
     ctx.lineJoin = 'round';
     ctx.lineWidth = 16;
     ctx.strokeStyle = '#14110e';
     ctx.strokeText(ch, 0, 0);
 
-    // Clip fill into letter — destination art preferred
     ctx.save();
     ctx.fillStyle = '#000';
     ctx.fillText(ch, 0, 0);
     ctx.globalCompositeOperation = 'source-in';
-    const usePhoto = !art || li % 3 === 2;
     const fillImg =
-      (usePhoto && photoImgs.length > 0
-        ? photoImgs[li % photoImgs.length]
-        : null) ||
-      art ||
-      (photoImgs.length > 0 ? photoImgs[li % photoImgs.length] : null);
+      letterFillImgs[li] ||
+      letterFillImgs[li % Math.max(letterFillImgs.length, 1)] ||
+      art;
     if (fillImg) {
-      const sliceW = fillImg.naturalWidth / Math.max(long, 1);
-      const sx = (li % Math.max(long, 1)) * sliceW * 0.85;
       ctx.drawImage(
         fillImg,
-        sx,
-        fillImg.naturalHeight * 0.05,
-        Math.max(sliceW, fillImg.naturalWidth * 0.35),
-        fillImg.naturalHeight * 0.9,
-        -cw * 0.9,
-        -letterSize * 0.75,
-        cw * 1.8,
-        letterSize * 1.5,
+        -cw * 0.95,
+        -size * 0.78,
+        cw * 1.9,
+        size * 1.55,
       );
     } else {
       ctx.fillStyle = '#e8a060';
-      ctx.fillRect(-cw, -letterSize, cw * 2, letterSize * 2);
+      ctx.fillRect(-cw, -size, cw * 2, size * 2);
     }
     ctx.restore();
 
-    // Cream inner keyline + outer stroke
     ctx.lineWidth = 5;
     ctx.strokeStyle = 'rgba(250, 240, 220, 0.9)';
     ctx.strokeText(ch, 0, 0);
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 7;
     ctx.strokeStyle = '#14110e';
     ctx.strokeText(ch, 0, 0);
 
     ctx.restore();
-    x += cw * 0.94;
+    x += cw * 0.92;
     li += 1;
+  }
+
+  const region = regionLabelFor(text);
+  if (region) {
+    ctx.save();
+    ctx.translate(POSTCARD_WIDTH / 2, baseY + size * 0.75);
+    ctx.rotate((-2 * Math.PI) / 180);
+    ctx.textAlign = 'center';
+    ctx.font = `400 46px Anton, Impact, "Arial Black", sans-serif`;
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#14110e';
+    ctx.fillStyle = '#c62828';
+    ctx.strokeText(region, 0, 0);
+    ctx.fillText(region, 0, 0);
+    ctx.restore();
   }
 }
 
@@ -314,6 +351,8 @@ export async function exportPostcardJpeg(
     }
   }
 
+  drawBleedUnderlay(ctx, photoImgs);
+
   for (const card of sorted) {
     const photo = byId.get(card.photoId!);
     if (!photo?.objectUrl) continue;
@@ -335,11 +374,25 @@ export async function exportPostcardJpeg(
     }
   }
 
+  const letterCount = project.destination.displayName.replace(/\s/g, '').length || 6;
+  const vignetteUrls = createLetterFillVignettes(
+    project.destination.displayName || 'Travel',
+    Math.max(letterCount, 6),
+  );
+  const letterFillImgs: HTMLImageElement[] = [];
+  for (const url of vignetteUrls) {
+    try {
+      letterFillImgs.push(await loadImage(url));
+    } catch {
+      // skip
+    }
+  }
+
   drawLargeLetters(
     ctx,
     project.destination.displayName,
+    letterFillImgs,
     artImg,
-    photoImgs,
     project.style,
   );
   applyVintageOverlay(ctx, project.style);

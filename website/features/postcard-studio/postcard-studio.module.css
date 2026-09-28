@@ -141,42 +141,45 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: 280px;
+  top: 240px;
   z-index: 72;
   pointer-events: none;
   text-align: center;
-  filter: drop-shadow(0 10px 12px rgba(20, 12, 8, 0.42));
+  filter: drop-shadow(0 12px 14px rgba(20, 12, 8, 0.45));
 }
 
 .greetingsVintage {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: 14px;
-  margin-bottom: 2px;
-  transform: rotate(-3.5deg);
+  gap: 16px;
+  margin-bottom: 4px;
+  transform: rotate(-4deg) translateX(-12px);
 }
 
 .greetingsWord {
-  font-family: Georgia, 'Brush Script MT', 'Segoe Script', cursive;
-  font-style: italic;
-  font-size: 68px;
-  font-weight: 700;
+  font-family: var(--font-greetings), 'Segoe Script', 'Brush Script MT', cursive;
+  font-style: normal;
+  font-size: 92px;
+  font-weight: 400;
+  line-height: 1;
   color: #f2d24b;
-  -webkit-text-stroke: 2.5px #1a1510;
+  -webkit-text-stroke: 1.5px #14110e;
+  paint-order: stroke fill;
   text-shadow:
-    3px 3px 0 #1a1510,
-    -1px -1px 0 #1a1510;
+    3px 4px 0 #14110e,
+    -1px 0 0 #14110e;
 }
 
 .greetingsFromWord {
   font-family: Georgia, 'Times New Roman', serif;
   font-style: italic;
-  font-size: 38px;
+  font-size: 34px;
   font-weight: 700;
   color: #c62828;
-  -webkit-text-stroke: 1.5px #1a1510;
-  transform: rotate(-7deg);
+  -webkit-text-stroke: 1px #14110e;
+  transform: rotate(-8deg) translateY(6px);
+  text-shadow: 2px 2px 0 #14110e;
 }
 
 .bigWordArc {
@@ -185,12 +188,12 @@
   align-items: flex-end;
   flex-wrap: nowrap;
   gap: 0;
-  padding: 0 8px;
-  min-height: 300px;
+  padding: 0 4px;
+  min-height: 320px;
 }
 
 .bigWordSlant {
-  transform: rotate(-6deg);
+  transform: rotate(-5deg);
 }
 
 .bigWordStack {
@@ -200,37 +203,51 @@
 }
 
 .letterSpace {
-  width: 22px;
+  width: 18px;
   flex: 0 0 auto;
 }
 
 .blockLetter {
   position: relative;
   display: inline-block;
-  font-family: Impact, Haettenschweiler, 'Arial Black', 'Franklin Gothic Heavy',
+  font-family: var(--font-block), Impact, Haettenschweiler, 'Arial Black',
     sans-serif;
-  font-weight: 900;
+  font-weight: 400;
   font-size: var(--letter-size, 200px);
   line-height: 0.78;
-  letter-spacing: -0.055em;
-  margin: 0 -0.035em;
+  letter-spacing: -0.02em;
+  margin: 0 -0.04em;
   transform-origin: center bottom;
+  text-transform: uppercase;
 }
 
 .blockLetterFace,
 .blockLetterDepth,
+.blockLetterExtrude,
 .blockLetterStroke {
   display: block;
+}
+
+/* Deep mustard extrusion — Seaside / LA large-letter sides */
+.blockLetterExtrude {
+  position: absolute;
+  inset: 0;
+  color: #c9a028;
+  transform: translate(14px, 16px);
+  z-index: 0;
+  -webkit-text-stroke: 0;
+  text-shadow:
+    2px 2px 0 #8a6a10,
+    4px 4px 0 #6a5010;
 }
 
 .blockLetterDepth {
   position: absolute;
   inset: 0;
-  color: #b84a1c;
-  transform: translate(11px, 13px);
-  z-index: 0;
+  color: #8a3210;
+  transform: translate(7px, 8px);
+  z-index: 1;
   -webkit-text-stroke: 0;
-  text-shadow: 4px 4px 0 #8a3210;
 }
 
 .blockLetterFace {
@@ -238,14 +255,14 @@
   z-index: 2;
   color: transparent;
   background-image: var(--fill-image),
-    linear-gradient(160deg, #f0d5a8 0%, #e8a060 45%, #d4783c 100%);
-  background-size: 320% 160%, 100% 100%;
+    linear-gradient(165deg, #f2d8a8 0%, #e09050 50%, #c86830 100%);
+  background-size: cover, 100% 100%;
   background-position: var(--fill-pos, 50% 40%), center;
   background-repeat: no-repeat, no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: saturate(1.2) contrast(1.08) brightness(1.02);
+  filter: saturate(1.25) contrast(1.1);
 }
 
 .blockLetterStroke {
@@ -253,14 +270,82 @@
   inset: 0;
   z-index: 3;
   color: transparent;
-  -webkit-text-stroke: 11px #14110e;
+  -webkit-text-stroke: 12px #14110e;
   pointer-events: none;
-  paint-order: stroke fill;
+}
+
+.regionLabel {
+  margin-top: 8px;
+  font-family: var(--font-block), Impact, 'Arial Black', sans-serif;
+  font-size: 48px;
+  letter-spacing: 0.12em;
+  color: #c62828;
+  -webkit-text-stroke: 2px #14110e;
+  text-shadow:
+    2px 2px 0 #faf6ef,
+    3px 3px 0 #14110e;
+  transform: rotate(-2deg);
 }
 
 .titleWidthGuard {
   height: 0;
   overflow: hidden;
+}
+
+.photoBleed {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  gap: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.photoBleedCell {
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.photoBleedCell img {
+  position: absolute;
+  inset: -8%;
+  width: 116%;
+  height: 116%;
+  object-fit: cover;
+  filter: saturate(1.08) contrast(1.04);
+}
+
+.presetGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.presetChip {
+  border: 1px solid rgba(40, 30, 20, 0.22);
+  background: #faf6ef;
+  color: #2a2218;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.presetChip:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.presetChipActive {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
 }
 
 .greetings {

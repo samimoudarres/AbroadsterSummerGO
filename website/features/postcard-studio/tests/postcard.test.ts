@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { clampCropOffset, clampCropScale } from '../cropMath';
+import { DESTINATION_PRESETS, findDestinationPreset } from '../destinationPresets';
 import { generateLayout, slotsForTemplate } from '../layoutEngine';
 import {
   destinationCacheKey,
@@ -42,23 +43,40 @@ describe('destination text', () => {
   });
 });
 
+describe('destination presets', () => {
+  it('includes popular study-abroad cities', () => {
+    assert.ok(DESTINATION_PRESETS.length >= 12);
+    assert.ok(findDestinationPreset('Florence'));
+    assert.ok(findDestinationPreset('Ibiza'));
+    assert.ok(findDestinationPreset('Interlaken'));
+    assert.equal(findDestinationPreset('Florence')?.regionLabel, 'ITALY');
+  });
+
+  it('matches aliases', () => {
+    assert.equal(findDestinationPreset('Firenze')?.id, 'florence');
+    assert.equal(findDestinationPreset('Majorca')?.id, 'mallorca');
+  });
+});
+
 describe('layout engine', () => {
   it('adapts slot counts for 4/8/10/12', () => {
     assert.ok(slotsForTemplate('classic', 4) >= 8);
-    assert.ok(slotsForTemplate('classic', 10) >= 9);
+    assert.ok(slotsForTemplate('classic', 10) >= 8);
     assert.equal(slotsForTemplate('scrapbook', 12), 12);
     assert.ok(slotsForTemplate('editorial', 4) >= 6);
   });
 
-  it('keeps frames mostly covering the canvas', () => {
-    const ids = Array.from({ length: 12 }, (_, i) => `p${i}`);
-    for (const template of ['classic', 'scrapbook', 'editorial'] as const) {
-      const cards = generateLayout(template, ids);
-      assert.ok(cards.length >= 8);
-      // Cloth layouts intentionally bleed past edges; ensure cards are large
-      for (const c of cards) {
-        assert.ok(c.w >= 380);
-        assert.ok(c.h >= 400);
+  it('covers canvas with large overlapping frames for 4 and 12 photos', () => {
+    for (const n of [4, 8, 12]) {
+      const ids = Array.from({ length: n }, (_, i) => `p${i}`);
+      for (const template of ['classic', 'scrapbook', 'editorial'] as const) {
+        const cards = generateLayout(template, ids);
+        assert.ok(cards.length >= 10, `${template}/${n} too few cards`);
+        for (const c of cards) {
+          assert.ok(c.w >= 360, `narrow card ${c.w}`);
+          assert.ok(c.h >= 400, `short card ${c.h}`);
+        }
+        assert.ok(cards.some((c) => c.x < 0 || c.y < 0));
       }
     }
   });

@@ -11,8 +11,15 @@ import {
 } from 'react';
 import { LargeLetterTitle } from './LargeLetterTitle';
 import { clampCropOffset, clampCropScale, normalizeCardCrop, resetCrop } from './cropMath';
+import {
+  DESTINATION_PRESETS,
+  findDestinationPreset,
+} from './destinationPresets';
 import { exportPostcardJpeg } from './exportCanvas';
-import { createFallbackDestinationArt } from './fallbackArt';
+import {
+  createFallbackDestinationArt,
+  createLetterFillVignettes,
+} from './fallbackArt';
 import { HistoryManager } from './history';
 import { generateLayout, needsClothUpgrade, reorderLayers, shuffleLayout } from './layoutEngine';
 import { photoCountMessage, processPhotoFile } from './photoProcess';
@@ -46,6 +53,15 @@ import {
   exportFilename,
   validateDestination,
 } from './utils';
+
+function letterCountOf(name: string): number {
+  return (name || '').replace(/\s/g, '').length || 8;
+}
+
+function buildLetterFills(name: string): string[] {
+  const n = letterCountOf(name);
+  return createLetterFillVignettes(name || 'Travel', Math.max(n, 6));
+}
 
 type DragMode =
   | { kind: 'move'; cardId: string; ox: number; oy: number }
@@ -98,6 +114,7 @@ export function PostcardStudioApp() {
   const [dropActive, setDropActive] = useState(false);
   const [scale, setScale] = useState(0.35);
   const [ready, setReady] = useState(false);
+  const [letterFills, setLetterFills] = useState<string[]>([]);
   const historyRef = useRef(new HistoryManager<PostcardProject>());
   const dragRef = useRef<DragMode>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -190,6 +207,9 @@ export function PostcardStudioApp() {
           };
         }
         setProject(restored);
+        setLetterFills(
+          buildLetterFills(restored.destination.displayName || 'Travel'),
+        );
         setStatus('Restored your last postcard draft on this device.');
       } catch {
         // ignore
@@ -227,13 +247,17 @@ export function PostcardStudioApp() {
   // Destination art (fallback always; try API when available)
   const refreshArt = useCallback(async (name: string) => {
     const fallbackUrl = createFallbackDestinationArt(name || 'Travel');
+    const preset = findDestinationPreset(name);
+    setLetterFills(buildLetterFills(name || 'Travel'));
     setProject((p) => ({
       ...p,
       destinationArt: {
         status: 'fallback',
         url: fallbackUrl,
         source: 'fallback',
-        message: 'Using built-in vintage art (AI optional).',
+        message: preset
+          ? `Using ${preset.displayName} landmark letter fills.`
+          : 'Using built-in vintage art (AI optional).',
       },
     }));
     try {
@@ -336,17 +360,39 @@ export function PostcardStudioApp() {
       setErrors([check.error || 'Invalid destination']);
       return;
     }
+    const preset = findDestinationPreset(check.value);
+    const displayName = preset?.displayName ?? check.value;
     updateProject((p) => ({
       ...p,
       destination: {
-        displayName: check.value,
-        cacheKey: destinationCacheKey(check.value),
+        displayName,
+        cacheKey: destinationCacheKey(displayName),
       },
       destinationArt: { status: 'fallback', url: null, source: 'fallback' },
     }));
-    void refreshArt(check.value);
+    void refreshArt(displayName);
     setErrors([]);
-    setStatus(`Destination set to ${check.value}.`);
+    setStatus(
+      preset
+        ? `Preset loaded: ${displayName} (${preset.regionLabel}).`
+        : `Destination set to ${displayName}.`,
+    );
+  };
+
+  const selectPreset = (presetId: string) => {
+    const preset = DESTINATION_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    updateProject((p) => ({
+      ...p,
+      destination: {
+        displayName: preset.displayName,
+        cacheKey: destinationCacheKey(preset.displayName),
+      },
+      destinationArt: { status: 'fallback', url: null, source: 'fallback' },
+    }));
+    void refreshArt(preset.displayName);
+    setErrors([]);
+    setStatus(`Preset: ${preset.displayName}, ${preset.regionLabel}.`);
   };
 
   const setTemplate = (templateId: TemplateId) => {
@@ -589,6 +635,33 @@ export function PostcardStudioApp() {
               onPointerLeave={onStagePointerUp}
               onPointerCancel={onStagePointerUp}
             >
+              {/* Full-bleed photo underlay — kills gray gutters */}
+              {project.photos.length ? (
+                <div
+                  className={styles.photoBleed}
+                  aria-hidden
+                  style={{
+                    gridTemplateColumns: '1fr 1fr',
+                    gridTemplateRows: `repeat(${Math.ceil(
+                      Math.max(6, Math.min(project.photos.length * 2, 12)) / 2,
+                    )}, 1fr)`,
+                  }}
+                >
+                  {Array.from({
+                    length: Math.max(6, Math.min(project.photos.length * 2, 12)),
+                  }).map((_, i) => {
+                    const photo = project.photos[i % project.photos.length];
+                    if (!photo?.objectUrl) return null;
+                    return (
+                      <div key={`bleed-${i}`} className={styles.photoBleedCell}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={photo.objectUrl} alt="" draggable={false} />
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
               {/* Photo cloth first (under letters) */}
               {[...project.cards]
                 .filter((c) => c.photoId && !c.hidden)
@@ -681,8 +754,8 @@ export function PostcardStudioApp() {
 
               <LargeLetterTitle
                 text={project.destination.displayName}
+                letterFills={letterFills}
                 artUrl={project.destinationArt.url}
-                photos={project.photos}
                 greetingsFrom={project.style.greetingsFrom}
                 titleVariant={project.style.titleVariant}
               />
@@ -720,6 +793,26 @@ export function PostcardStudioApp() {
         <aside className={styles.panel} aria-label="Postcard controls">
           <div className={styles.field}>
             <label htmlFor="dest">Destination</label>
+            <div className={styles.presetGrid} role="list" aria-label="Popular destinations">
+              {DESTINATION_PRESETS.map((preset) => {
+                const active =
+                  project.destination.displayName.trim().toLowerCase() ===
+                  preset.displayName.toLowerCase();
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    role="listitem"
+                    className={`${styles.presetChip} ${
+                      active ? styles.presetChipActive : ''
+                    }`}
+                    onClick={() => selectPreset(preset.id)}
+                  >
+                    {preset.displayName}
+                  </button>
+                );
+              })}
+            </div>
             <input
               id="dest"
               type="text"
@@ -737,13 +830,13 @@ export function PostcardStudioApp() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') applyDestination();
               }}
-              placeholder="Ibiza, Florence, San Sebastián…"
+              placeholder="Or type any city…"
               maxLength={48}
               autoComplete="off"
             />
             <p className={styles.hint}>
-              Spelling is kept exactly as you type it. Art fills the letters; the
-              word itself is drawn by the site.
+              Presets unlock landmark-filled letters (Duomo, Colosseum, beaches…).
+              Custom cities still get vintage block letters. Spelling stays exact.
             </p>
           </div>
 

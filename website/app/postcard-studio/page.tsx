@@ -1,5 +1,20 @@
 import type { Metadata } from 'next';
+import { Anton, Great_Vibes } from 'next/font/google';
 import { PostcardStudioClient } from './PostcardStudioClient';
+
+const greetingsFont = Great_Vibes({
+  weight: '400',
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-greetings',
+});
+
+const blockFont = Anton({
+  weight: '400',
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-block',
+});
 
 export const metadata: Metadata = {
   title: 'Postcard Studio',
@@ -27,5 +42,9 @@ export default function PostcardStudioPage() {
     );
   }
 
-  return <PostcardStudioClient />;
+  return (
+    <div className={`${greetingsFont.variable} ${blockFont.variable}`}>
+      <PostcardStudioClient />
+    </div>
+  );
 }
