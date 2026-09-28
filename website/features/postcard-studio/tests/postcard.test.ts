@@ -44,21 +44,21 @@ describe('destination text', () => {
 
 describe('layout engine', () => {
   it('adapts slot counts for 4/8/10/12', () => {
-    assert.ok(slotsForTemplate('classic', 4) >= 6);
-    assert.equal(slotsForTemplate('classic', 10), 10);
+    assert.ok(slotsForTemplate('classic', 4) >= 8);
+    assert.ok(slotsForTemplate('classic', 10) >= 9);
     assert.equal(slotsForTemplate('scrapbook', 12), 12);
-    assert.ok(slotsForTemplate('editorial', 4) >= 5);
+    assert.ok(slotsForTemplate('editorial', 4) >= 6);
   });
 
-  it('keeps frames inside the canvas', () => {
+  it('keeps frames mostly covering the canvas', () => {
     const ids = Array.from({ length: 12 }, (_, i) => `p${i}`);
     for (const template of ['classic', 'scrapbook', 'editorial'] as const) {
       const cards = generateLayout(template, ids);
+      assert.ok(cards.length >= 8);
+      // Cloth layouts intentionally bleed past edges; ensure cards are large
       for (const c of cards) {
-        assert.ok(c.x >= 0);
-        assert.ok(c.y >= 0);
-        assert.ok(c.x + c.w <= POSTCARD_WIDTH);
-        assert.ok(c.y + c.h <= POSTCARD_HEIGHT);
+        assert.ok(c.w >= 380);
+        assert.ok(c.h >= 400);
       }
     }
   });

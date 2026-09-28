@@ -97,11 +97,11 @@ export interface PersistedProjectMeta {
 export const DEFAULT_STYLE: StyleSettings = {
   paper: 'cream',
   tape: 'tan',
-  border: 'polaroid',
-  vintageIntensity: 0.55,
-  warmth: 0.45,
-  grain: 0.35,
-  vignette: 0.4,
-  titleVariant: 'block',
+  border: 'thin',
+  vintageIntensity: 0.85,
+  warmth: 0.62,
+  grain: 0.55,
+  vignette: 0.58,
+  titleVariant: 'slant',
   greetingsFrom: true,
 };

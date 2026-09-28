@@ -6,15 +6,15 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type DragEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
+import { LargeLetterTitle } from './LargeLetterTitle';
 import { clampCropOffset, clampCropScale, normalizeCardCrop, resetCrop } from './cropMath';
 import { exportPostcardJpeg } from './exportCanvas';
 import { createFallbackDestinationArt } from './fallbackArt';
 import { HistoryManager } from './history';
-import { generateLayout, reorderLayers, shuffleLayout } from './layoutEngine';
+import { generateLayout, needsClothUpgrade, reorderLayers, shuffleLayout } from './layoutEngine';
 import { photoCountMessage, processPhotoFile } from './photoProcess';
 import styles from './postcard-studio.module.css';
 import {
@@ -169,6 +169,26 @@ export function PostcardStudioApp() {
             source: 'fallback',
           };
         }
+        // Upgrade sparse drafts to dense photo-cloth layouts
+        if (
+          restored.photos.length > 0 &&
+          needsClothUpgrade(restored.cards)
+        ) {
+          restored.cards = generateLayout(
+            restored.templateId,
+            restored.photos.map((p) => p.id),
+          );
+          restored.style = {
+            ...DEFAULT_STYLE,
+            ...restored.style,
+            vintageIntensity: Math.max(restored.style.vintageIntensity, 0.8),
+            border: restored.style.border === 'polaroid' ? 'thin' : restored.style.border,
+            titleVariant:
+              restored.style.titleVariant === 'block'
+                ? 'slant'
+                : restored.style.titleVariant,
+          };
+        }
         setProject(restored);
         setStatus('Restored your last postcard draft on this device.');
       } catch {
@@ -292,29 +312,11 @@ export function PostcardStudioApp() {
     if (added.length) {
       updateProject((p) => {
         const photos = [...p.photos, ...added];
-        const cards =
-          p.cards.length === 0
-            ? generateLayout(
-                p.templateId,
-                photos.map((x) => x.id),
-              )
-            : (() => {
-                // fill empty slots then append via regenerate if needed
-                const nextCards = p.cards.map((c) => ({ ...c }));
-                const unused = photos
-                  .map((x) => x.id)
-                  .filter((id) => !nextCards.some((c) => c.photoId === id));
-                for (const c of nextCards) {
-                  if (!c.photoId && unused.length) c.photoId = unused.shift()!;
-                }
-                if (unused.length && nextCards.length < MAX_PHOTOS) {
-                  return generateLayout(
-                    p.templateId,
-                    photos.map((x) => x.id),
-                  );
-                }
-                return nextCards;
-              })();
+        // Always rebuild dense cloth so the backdrop stays full-bleed
+        const cards = generateLayout(
+          p.templateId,
+          photos.map((x) => x.id),
+        );
         return { ...p, photos, cards };
       });
       setStatus(`Added ${added.length} photo${added.length === 1 ? '' : 's'}.`);
@@ -502,21 +504,6 @@ export function PostcardStudioApp() {
     }
   };
 
-  const letterStyle = (i: number, total: number) => {
-    const art = project.destinationArt.url;
-    return {
-      backgroundImage: art ? `url(${art})` : undefined,
-      backgroundPosition: `${(i / Math.max(total - 1, 1)) * 100}% 50%`,
-      transform: `rotate(${((i % 5) - 2) * 1.2}deg) translateY(${((i % 3) - 1) * 3}px)`,
-      fontSize:
-        project.destination.displayName.length > 12
-          ? 96
-          : project.destination.displayName.length > 8
-            ? 128
-            : 156,
-    } as CSSProperties;
-  };
-
   const countMsg = photoCountMessage(project.photos.length);
 
   if (!ready) {
@@ -602,30 +589,7 @@ export function PostcardStudioApp() {
               onPointerLeave={onStagePointerUp}
               onPointerCancel={onStagePointerUp}
             >
-              <div className={styles.titleLayer}>
-                {project.style.greetingsFrom ? (
-                  <div className={styles.greetings}>Greetings from</div>
-                ) : null}
-                <div className={styles.bigWord} aria-label={project.destination.displayName}>
-                  {(project.destination.displayName || 'YOUR PLACE')
-                    .toUpperCase()
-                    .split('')
-                    .map((ch, i, arr) =>
-                      ch === ' ' ? (
-                        <span key={`sp-${i}`} style={{ width: 24 }} />
-                      ) : (
-                        <span
-                          key={`${ch}-${i}`}
-                          className={styles.letter}
-                          style={letterStyle(i, arr.length)}
-                        >
-                          {ch}
-                        </span>
-                      ),
-                    )}
-                </div>
-              </div>
-
+              {/* Photo cloth first (under letters) */}
               {[...project.cards]
                 .filter((c) => c.photoId && !c.hidden)
                 .sort((a, b) => a.zIndex - b.zIndex)
@@ -636,15 +600,15 @@ export function PostcardStudioApp() {
                     selectedId === card.id ? styles.selectedRing : '';
                   const pad =
                     project.style.border === 'thin'
-                      ? 10
+                      ? 4
                       : project.style.border === 'thick'
-                        ? 18
-                        : 14;
+                        ? 9
+                        : 7;
                   const bottomPad =
                     project.style.border === 'polaroid'
-                      ? 42
+                      ? 20
                       : project.style.border === 'thick'
-                        ? 28
+                        ? 14
                         : pad;
                   const innerW = card.w - pad * 2;
                   const innerH = card.h - pad - bottomPad;
@@ -664,7 +628,7 @@ export function PostcardStudioApp() {
                         width: card.w,
                         height: card.h,
                         transform: `rotate(${card.rotation}deg)`,
-                        zIndex: 30 + card.zIndex,
+                        zIndex: 20 + card.zIndex,
                       }}
                       onClick={() => setSelectedId(card.id)}
                     >
@@ -715,6 +679,14 @@ export function PostcardStudioApp() {
                   );
                 })}
 
+              <LargeLetterTitle
+                text={project.destination.displayName}
+                artUrl={project.destinationArt.url}
+                photos={project.photos}
+                greetingsFrom={project.style.greetingsFrom}
+                titleVariant={project.style.titleVariant}
+              />
+
               {project.style.warmth > 0.05 ? (
                 <div
                   className={styles.warmth}
@@ -735,10 +707,12 @@ export function PostcardStudioApp() {
                 <div
                   className={styles.grainOverlay}
                   style={{
-                    opacity: 0.15 + project.style.grain * 0.35,
+                    opacity: 0.15 + project.style.grain * 0.4,
                   }}
                 />
               ) : null}
+              <div className={styles.linenOverlay} aria-hidden />
+              <div className={styles.edgeFrame} aria-hidden />
             </div>
           </div>
         </div>

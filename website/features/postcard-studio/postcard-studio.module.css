@@ -84,10 +84,10 @@
   width: 1080px;
   height: 1920px;
   transform-origin: top left;
-  border-radius: 8px;
+  border-radius: 4px;
   overflow: hidden;
-  box-shadow: 0 18px 40px rgba(40, 30, 20, 0.22);
-  background: #f3ddc5;
+  box-shadow: 0 18px 40px rgba(40, 30, 20, 0.28);
+  background: #2a2218;
 }
 
 .stage.previewMode .handle,
@@ -96,23 +96,171 @@
 }
 
 .paperCream {
-  background: #f3ddc5;
+  background: #3a3024;
 }
 .paperIvory {
-  background: #f7ecd8;
+  background: #3d3428;
 }
 .paperKraft {
-  background: #d8c3a3;
+  background: #2e261c;
+}
+
+.linenOverlay {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 76;
+  opacity: 0.34;
+  mix-blend-mode: soft-light;
+  background-image: repeating-linear-gradient(
+      0deg,
+      rgba(80, 50, 30, 0.12) 0px,
+      rgba(80, 50, 30, 0.12) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(80, 50, 30, 0.09) 0px,
+      rgba(80, 50, 30, 0.09) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+}
+
+.edgeFrame {
+  pointer-events: none;
+  position: absolute;
+  inset: 8px;
+  z-index: 85;
+  border: 12px solid rgba(245, 235, 215, 0.94);
+  box-shadow: inset 0 0 0 3px rgba(30, 20, 12, 0.6);
 }
 
 .titleLayer {
   position: absolute;
   left: 0;
   right: 0;
-  top: 430px;
-  z-index: 20;
+  top: 280px;
+  z-index: 72;
   pointer-events: none;
   text-align: center;
+  filter: drop-shadow(0 10px 12px rgba(20, 12, 8, 0.42));
+}
+
+.greetingsVintage {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 2px;
+  transform: rotate(-3.5deg);
+}
+
+.greetingsWord {
+  font-family: Georgia, 'Brush Script MT', 'Segoe Script', cursive;
+  font-style: italic;
+  font-size: 68px;
+  font-weight: 700;
+  color: #f2d24b;
+  -webkit-text-stroke: 2.5px #1a1510;
+  text-shadow:
+    3px 3px 0 #1a1510,
+    -1px -1px 0 #1a1510;
+}
+
+.greetingsFromWord {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 38px;
+  font-weight: 700;
+  color: #c62828;
+  -webkit-text-stroke: 1.5px #1a1510;
+  transform: rotate(-7deg);
+}
+
+.bigWordArc {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  gap: 0;
+  padding: 0 8px;
+  min-height: 300px;
+}
+
+.bigWordSlant {
+  transform: rotate(-6deg);
+}
+
+.bigWordStack {
+  flex-wrap: wrap;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.letterSpace {
+  width: 22px;
+  flex: 0 0 auto;
+}
+
+.blockLetter {
+  position: relative;
+  display: inline-block;
+  font-family: Impact, Haettenschweiler, 'Arial Black', 'Franklin Gothic Heavy',
+    sans-serif;
+  font-weight: 900;
+  font-size: var(--letter-size, 200px);
+  line-height: 0.78;
+  letter-spacing: -0.055em;
+  margin: 0 -0.035em;
+  transform-origin: center bottom;
+}
+
+.blockLetterFace,
+.blockLetterDepth,
+.blockLetterStroke {
+  display: block;
+}
+
+.blockLetterDepth {
+  position: absolute;
+  inset: 0;
+  color: #b84a1c;
+  transform: translate(11px, 13px);
+  z-index: 0;
+  -webkit-text-stroke: 0;
+  text-shadow: 4px 4px 0 #8a3210;
+}
+
+.blockLetterFace {
+  position: relative;
+  z-index: 2;
+  color: transparent;
+  background-image: var(--fill-image),
+    linear-gradient(160deg, #f0d5a8 0%, #e8a060 45%, #d4783c 100%);
+  background-size: 320% 160%, 100% 100%;
+  background-position: var(--fill-pos, 50% 40%), center;
+  background-repeat: no-repeat, no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: saturate(1.2) contrast(1.08) brightness(1.02);
+}
+
+.blockLetterStroke {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  color: transparent;
+  -webkit-text-stroke: 11px #14110e;
+  pointer-events: none;
+  paint-order: stroke fill;
+}
+
+.titleWidthGuard {
+  height: 0;
+  overflow: hidden;
 }
 
 .greetings {
@@ -160,13 +308,13 @@
 }
 
 .cardPolaroid {
-  padding: 14px 14px 42px;
+  padding: 7px 7px 20px;
 }
 .cardThin {
-  padding: 10px;
+  padding: 4px;
 }
 .cardThick {
-  padding: 18px 18px 28px;
+  padding: 9px 9px 14px;
 }
 
 .cardInner {

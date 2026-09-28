@@ -5,119 +5,121 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-/** Safe card count per template for N photos. */
+/**
+ * Dense "photo cloth" layouts: oversized frames that overlap heavily so almost
+ * no paper shows through — like prints scattered across a table.
+ */
 export function slotsForTemplate(template: TemplateId, photoCount: number): number {
   const n = clamp(photoCount, 4, 12);
-  if (template === 'classic') return clamp(Math.min(n, 10), 6, 10);
-  if (template === 'scrapbook') return clamp(n, 8, 12);
-  return clamp(Math.min(n, 8), 5, 8);
+  if (template === 'editorial') return clamp(Math.max(n, 7), 7, 10);
+  if (template === 'scrapbook') return clamp(Math.max(n, 9), 9, 12);
+  return clamp(Math.max(n, 9), 9, 12);
 }
 
 type Slot = { x: number; y: number; w: number; h: number; rotation: number };
 
-function classicSlots(count: number): Slot[] {
-  // Surround large letter band (y ~ 520–1100)
-  const presets: Slot[] = [
-    { x: 48, y: 80, w: 320, h: 380, rotation: -6 },
-    { x: 700, y: 60, w: 300, h: 340, rotation: 5 },
-    { x: 40, y: 500, w: 240, h: 300, rotation: -3 },
-    { x: 800, y: 480, w: 230, h: 290, rotation: 4 },
-    { x: 60, y: 1180, w: 340, h: 300, rotation: 3 },
-    { x: 680, y: 1160, w: 320, h: 320, rotation: -5 },
-    { x: 380, y: 80, w: 280, h: 260, rotation: 2 },
-    { x: 360, y: 1380, w: 360, h: 280, rotation: -2 },
-    { x: 40, y: 860, w: 220, h: 260, rotation: 6 },
-    { x: 820, y: 840, w: 210, h: 250, rotation: -4 },
-  ];
-  return presets.slice(0, count).map((s) => ({
-    ...s,
-    x: clamp(s.x, 16, POSTCARD_WIDTH - s.w - 16),
-    y: clamp(s.y, 16, POSTCARD_HEIGHT - s.h - 16),
-  }));
-}
+/** Cover the full 1080×1920 with overlapping tiles — no beige gaps. */
+function clothSlots(count: number, density: 'max' | 'dense' | 'bold'): Slot[] {
+  // Oversized cards + negative margins = full-bleed cloth
+  const baseW = density === 'bold' ? 620 : density === 'max' ? 580 : 540;
+  const baseH = density === 'bold' ? 700 : density === 'max' ? 660 : 620;
+  const cols = density === 'bold' ? 2 : 2;
+  const rows = Math.ceil(count / cols);
+  const slots: Slot[] = [];
 
-function scrapbookSlots(count: number): Slot[] {
-  const presets: Slot[] = [
-    { x: 36, y: 70, w: 300, h: 340, rotation: -8 },
-    { x: 380, y: 50, w: 280, h: 300, rotation: 7 },
-    { x: 720, y: 90, w: 300, h: 360, rotation: -4 },
-    { x: 50, y: 440, w: 260, h: 300, rotation: 5 },
-    { x: 360, y: 400, w: 320, h: 280, rotation: -6 },
-    { x: 740, y: 480, w: 280, h: 300, rotation: 3 },
-    { x: 40, y: 860, w: 300, h: 320, rotation: -3 },
-    { x: 400, y: 820, w: 300, h: 340, rotation: 8 },
-    { x: 760, y: 900, w: 260, h: 300, rotation: -7 },
-    { x: 80, y: 1280, w: 320, h: 300, rotation: 4 },
-    { x: 460, y: 1320, w: 280, h: 280, rotation: -5 },
-    { x: 780, y: 1360, w: 240, h: 260, rotation: 6 },
-  ];
-  return presets.slice(0, count).map((s) => ({
-    ...s,
-    x: clamp(s.x, 12, POSTCARD_WIDTH - s.w - 12),
-    y: clamp(s.y, 12, POSTCARD_HEIGHT - s.h - 12),
-  }));
-}
+  for (let i = 0; i < count; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const w = baseW + ((i * 41) % 100) - 30;
+    const h = baseH + ((i * 53) % 110) - 40;
+    const cellW = POSTCARD_WIDTH / cols;
+    const cellH = POSTCARD_HEIGHT / Math.max(rows, 1);
+    // Bleed past edges so paper never peeks through
+    const x = col * cellW - w * 0.28 + ((i * 17) % 50) - 25;
+    const y = row * cellH - h * 0.22 + ((i * 19) % 60) - 30;
+    const rotation = ((i % 7) - 3) * (density === 'max' ? 8 : 5.5);
+    slots.push({
+      x: clamp(x, -w * 0.35, POSTCARD_WIDTH - w * 0.65),
+      y: clamp(y, -h * 0.3, POSTCARD_HEIGHT - h * 0.65),
+      w,
+      h,
+      rotation,
+    });
+  }
 
-function editorialSlots(count: number): Slot[] {
-  const presets: Slot[] = [
-    { x: 70, y: 100, w: 420, h: 480, rotation: -3 },
-    { x: 560, y: 80, w: 440, h: 400, rotation: 2 },
-    { x: 60, y: 720, w: 380, h: 420, rotation: 3 },
-    { x: 520, y: 640, w: 480, h: 360, rotation: -2 },
-    { x: 80, y: 1280, w: 440, h: 380, rotation: -1 },
-    { x: 580, y: 1220, w: 420, h: 400, rotation: 2 },
-    { x: 360, y: 1000, w: 360, h: 320, rotation: 4 },
-    { x: 40, y: 400, w: 280, h: 280, rotation: -4 },
+  // Corner + mid-edge patches guarantee full coverage
+  const edgePatches: Slot[] = [
+    { x: -120, y: -90, w: 520, h: 560, rotation: -9 },
+    { x: POSTCARD_WIDTH - 400, y: -70, w: 520, h: 540, rotation: 7 },
+    { x: -100, y: POSTCARD_HEIGHT - 480, w: 500, h: 560, rotation: 6 },
+    { x: POSTCARD_WIDTH - 420, y: POSTCARD_HEIGHT - 500, w: 540, h: 580, rotation: -7 },
+    { x: POSTCARD_WIDTH / 2 - 280, y: -100, w: 560, h: 480, rotation: 3 },
+    { x: POSTCARD_WIDTH / 2 - 260, y: POSTCARD_HEIGHT - 420, w: 540, h: 500, rotation: -4 },
+    { x: -110, y: POSTCARD_HEIGHT / 2 - 280, w: 480, h: 560, rotation: 5 },
+    { x: POSTCARD_WIDTH - 370, y: POSTCARD_HEIGHT / 2 - 300, w: 500, h: 580, rotation: -5 },
   ];
-  return presets.slice(0, count).map((s) => ({
-    ...s,
-    x: clamp(s.x, 24, POSTCARD_WIDTH - s.w - 24),
-    y: clamp(s.y, 24, POSTCARD_HEIGHT - s.h - 24),
-  }));
+
+  const merged = [...slots];
+  for (let i = 0; i < edgePatches.length && merged.length < 16; i++) {
+    merged.push(edgePatches[i]);
+  }
+  return merged.slice(0, Math.max(count, 10));
 }
 
 export function generateLayout(
   template: TemplateId,
   photoIds: string[],
 ): CardState[] {
-  const count = slotsForTemplate(template, photoIds.length);
-  const ids = photoIds.slice(0, count);
-  const slots =
-    template === 'classic'
-      ? classicSlots(count)
-      : template === 'scrapbook'
-        ? scrapbookSlots(count)
-        : editorialSlots(count);
+  const count = slotsForTemplate(template, Math.max(photoIds.length, 4));
+  const density =
+    template === 'scrapbook' ? 'max' : template === 'classic' ? 'dense' : 'bold';
+  const slots = clothSlots(count, density);
 
-  return slots.map((s, i) => ({
-    id: `card-${i}-${ids[i] ?? 'empty'}`,
-    photoId: ids[i] ?? null,
-    x: s.x,
-    y: s.y,
-    w: s.w,
-    h: s.h,
-    rotation: s.rotation,
-    cropScale: 1,
-    cropOffsetX: 0,
-    cropOffsetY: 0,
-    zIndex: i + 1,
-  }));
+  const cards: CardState[] = slots.map((s, i) => {
+    const photoId = photoIds.length ? photoIds[i % photoIds.length] : null;
+    return {
+      id: `card-${i}-${photoId ?? 'empty'}`,
+      photoId,
+      x: s.x,
+      y: s.y,
+      w: s.w,
+      h: s.h,
+      rotation: s.rotation,
+      cropScale: 1.2 + (i % 3) * 0.1,
+      cropOffsetX: ((i % 5) - 2) * 0.05,
+      cropOffsetY: ((i % 3) - 1) * 0.04,
+      zIndex: i + 1,
+    };
+  });
+
+  return cards;
 }
 
-/** Shuffle within template constraints (new rotations/positions from presets with jitter). */
+/** True when a saved draft still uses sparse/oval-era card sizes. */
+export function needsClothUpgrade(cards: CardState[]): boolean {
+  if (cards.length < 8) return true;
+  const avgW = cards.reduce((s, c) => s + c.w, 0) / cards.length;
+  return avgW < 420;
+}
+
 export function shuffleLayout(
   template: TemplateId,
   cards: CardState[],
 ): CardState[] {
-  const photoIds = cards
-    .filter((c) => c.photoId && !c.hidden)
-    .map((c) => c.photoId!) ;
+  const photoIds = [
+    ...new Set(
+      cards
+        .filter((c) => c.photoId && !c.hidden)
+        .map((c) => c.photoId!),
+    ),
+  ];
   const base = generateLayout(template, photoIds);
   return base.map((c, i) => ({
     ...c,
-    rotation: c.rotation + (i % 2 === 0 ? -1.5 : 1.5),
-    x: clamp(c.x + ((i * 7) % 17) - 8, 12, POSTCARD_WIDTH - c.w - 12),
-    y: clamp(c.y + ((i * 11) % 19) - 9, 12, POSTCARD_HEIGHT - c.h - 12),
+    rotation: c.rotation + (i % 2 === 0 ? -3 : 3),
+    cropScale: clamp(c.cropScale + (i % 3) * 0.06, 1, 2.4),
+    x: clamp(c.x + ((i * 13) % 29) - 14, -c.w * 0.3, POSTCARD_WIDTH - c.w * 0.6),
+    y: clamp(c.y + ((i * 11) % 25) - 12, -c.h * 0.25, POSTCARD_HEIGHT - c.h * 0.6),
   }));
 }
 
