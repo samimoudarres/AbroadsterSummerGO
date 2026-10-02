@@ -21,7 +21,14 @@ export async function GET(_req: Request, ctx: Ctx) {
     return NextResponse.json({ ok: true, detail });
   } catch (err) {
     const message =
-      err instanceof Error ? err.message : 'Failed to load user activity';
+      err instanceof Error
+        ? err.message
+        : err &&
+            typeof err === 'object' &&
+            'message' in err &&
+            typeof (err as { message: unknown }).message === 'string'
+          ? (err as { message: string }).message
+          : 'Failed to load user activity';
     const status = message === 'User not found' ? 404 : 500;
     return NextResponse.json({ ok: false, error: message }, { status });
   }

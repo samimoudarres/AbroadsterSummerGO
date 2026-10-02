@@ -82,6 +82,14 @@ export function AdminDashboard() {
       setStats(statsData.stats);
       if (usersRes.ok && usersData.ok && usersData.users) {
         setUsers(usersData.users);
+      } else if (!usersRes.ok || !usersData.ok) {
+        setUsers([]);
+        setError(
+          usersData.error ||
+            statsData.error ||
+            'Could not load user activity list.',
+        );
+        return;
       }
       setError('');
     } catch {

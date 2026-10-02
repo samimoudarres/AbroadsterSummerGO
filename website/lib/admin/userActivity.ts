@@ -82,6 +82,12 @@ export type UserActivityDetail = {
   activityTrackingEnabled: boolean;
 };
 
+type ActivityOpenRow = {
+  created_at: string;
+  meta?: Record<string, unknown> | null;
+  user_id?: string;
+};
+
 function isoDaysAgo(days: number) {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - days);
@@ -122,6 +128,15 @@ function fillSeries(
   return toSeries(counts);
 }
 
+function isMissingRelation(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === 'PGRST205' ||
+    error.code === '42P01' ||
+    /does not exist|schema cache/i.test(error.message || '')
+  );
+}
+
 async function countEq(
   table: string,
   column: string,
@@ -137,32 +152,50 @@ async function countEq(
   if (since) q = q.gte(sinceColumn, since);
   const { count, error } = await q;
   if (error) {
-    // Missing table / column — treat as zero so dashboard stays resilient.
-    if (
-      error.code === 'PGRST205' ||
-      error.code === '42P01' ||
-      /does not exist|schema cache/i.test(error.message)
-    ) {
-      return 0;
-    }
+    if (isMissingRelation(error)) return 0;
     throw error;
   }
   return count ?? 0;
 }
 
+async function safeCount(
+  run: () => PromiseLike<{ count: number | null; error: { code?: string; message?: string } | null }>,
+) {
+  try {
+    const { count, error } = await run();
+    if (error) {
+      if (isMissingRelation(error)) return 0;
+      throw error;
+    }
+    return count ?? 0;
+  } catch (e) {
+    const err = e as { code?: string; message?: string };
+    if (isMissingRelation(err)) return 0;
+    throw e;
+  }
+}
+
+/** Real SELECT probe — HEAD requests can falsely succeed for missing tables. */
 async function tableExists(table: string) {
   const admin = getSupabaseAdmin();
-  const { error } = await admin.from(table).select('id', { head: true, count: 'exact' }).limit(1);
+  const { error } = await admin.from(table).select('*').limit(1);
   if (!error) return true;
-  if (
-    error.code === 'PGRST205' ||
-    error.code === '42P01' ||
-    /does not exist|schema cache/i.test(error.message)
-  ) {
-    return false;
+  if (isMissingRelation(error)) return false;
+  // Permission / other issues: treat as unavailable for optional features.
+  return false;
+}
+
+function countMap(
+  rows: Record<string, string | null | undefined>[] | null | undefined,
+  key: string,
+) {
+  const m = new Map<string, number>();
+  for (const row of rows ?? []) {
+    const id = row[key];
+    if (!id) continue;
+    m.set(id, (m.get(id) ?? 0) + 1);
   }
-  // Other errors still mean the table is addressable.
-  return true;
+  return m;
 }
 
 export async function fetchUsersActivityList(): Promise<UserListRow[]> {
@@ -205,47 +238,36 @@ export async function fetchUsersActivityList(): Promise<UserListRow[]> {
   const ids = profiles.map((p) => p.id);
   if (!ids.length) return [];
 
-  const [
-    posts,
-    stamps,
-    messages,
-    pushTokens,
-    appOpens,
-    authUsers,
-  ] = await Promise.all([
-    admin.from('posts').select('author_id').in('author_id', ids),
-    admin.from('post_stamps').select('user_id').in('user_id', ids),
-    admin.from('messages').select('sender_id').in('sender_id', ids),
-    admin.from('user_push_tokens').select('user_id').in('user_id', ids),
-    hasActivity
-      ? admin
-          .from('user_activity_events')
-          .select('user_id')
-          .eq('kind', 'app_open')
-          .gte('created_at', since7d)
-          .in('user_id', ids)
-      : Promise.resolve({ data: [] as { user_id: string }[], error: null }),
-    admin.auth.admin.listUsers({ page: 1, perPage: 200 }),
-  ]);
+  const [posts, stamps, messages, pushTokens, appOpens, authUsers] =
+    await Promise.all([
+      admin.from('posts').select('author_id').in('author_id', ids),
+      admin.from('post_stamps').select('user_id').in('user_id', ids),
+      admin.from('messages').select('sender_id').in('sender_id', ids),
+      admin.from('user_push_tokens').select('user_id').in('user_id', ids),
+      hasActivity
+        ? admin
+            .from('user_activity_events')
+            .select('user_id')
+            .eq('kind', 'app_open')
+            .gte('created_at', since7d)
+            .in('user_id', ids)
+        : Promise.resolve({
+            data: [] as { user_id: string }[],
+            error: null,
+          }),
+      admin.auth.admin.listUsers({ page: 1, perPage: 200 }),
+    ]);
 
   if (posts.error) throw posts.error;
   if (stamps.error) throw stamps.error;
   if (messages.error) throw messages.error;
   if (pushTokens.error) throw pushTokens.error;
-  if (appOpens.error) throw appOpens.error;
-
-  const countMap = (
-    rows: Record<string, string | null | undefined>[] | null,
-    key: string,
-  ) => {
-    const m = new Map<string, number>();
-    for (const row of rows ?? []) {
-      const id = row[key];
-      if (!id) continue;
-      m.set(id, (m.get(id) ?? 0) + 1);
-    }
-    return m;
-  };
+  // Activity table is optional — never fail the whole roster on it.
+  const openRows = isMissingRelation(appOpens.error)
+    ? []
+    : appOpens.error
+      ? []
+      : ((appOpens.data ?? []) as { user_id: string }[]);
 
   const postCounts = countMap(
     (posts.data ?? []) as Record<string, string>[],
@@ -259,10 +281,7 @@ export async function fetchUsersActivityList(): Promise<UserListRow[]> {
     (messages.data ?? []) as Record<string, string>[],
     'sender_id',
   );
-  const openCounts = countMap(
-    (appOpens.data ?? []) as Record<string, string>[],
-    'user_id',
-  );
+  const openCounts = countMap(openRows as Record<string, string>[], 'user_id');
   const pushSet = new Set((pushTokens.data ?? []).map((r) => r.user_id));
   const signInById = new Map(
     (authUsers.data?.users ?? []).map((u) => [u.id, u.last_sign_in_at ?? null]),
@@ -321,10 +340,25 @@ export async function fetchUserActivityDetail(
     last_active_at: profileRow.last_active_at ?? null,
   };
 
-  const authUser = await admin.auth.admin.getUserById(userId);
+  let lastSignInAt: string | null = null;
+  let authEmail: string | null = null;
+  let authPhone: string | null = null;
+  try {
+    const authUser = await admin.auth.admin.getUserById(userId);
+    lastSignInAt = authUser.data.user?.last_sign_in_at ?? null;
+    authEmail = authUser.data.user?.email ?? null;
+    authPhone = authUser.data.user?.phone ?? null;
+  } catch {
+    // Auth lookup is optional for the metrics panel.
+  }
 
-  const postIdsRes = await admin.from('posts').select('id').eq('author_id', userId);
-  if (postIdsRes.error) throw postIdsRes.error;
+  const postIdsRes = await admin
+    .from('posts')
+    .select('id')
+    .eq('author_id', userId);
+  if (postIdsRes.error && !isMissingRelation(postIdsRes.error)) {
+    throw postIdsRes.error;
+  }
   const postIds = (postIdsRes.data ?? []).map((p) => p.id);
 
   const [
@@ -365,14 +399,12 @@ export async function fetchUserActivityDetail(
     countEq('post_stamps', 'user_id', userId, since7d),
     countEq('post_stamps', 'user_id', userId, since30d),
     postIds.length
-      ? admin
-          .from('post_stamps')
-          .select('*', { count: 'exact', head: true })
-          .in('post_id', postIds)
-          .then((r) => {
-            if (r.error) throw r.error;
-            return r.count ?? 0;
-          })
+      ? safeCount(() =>
+          admin
+            .from('post_stamps')
+            .select('*', { count: 'exact', head: true })
+            .in('post_id', postIds),
+        )
       : Promise.resolve(0),
     countEq('messages', 'sender_id', userId),
     countEq('messages', 'sender_id', userId, since7d),
@@ -382,66 +414,70 @@ export async function fetchUserActivityDetail(
     countEq('trips', 'owner_id', userId),
     countEq('album_photos', 'uploader_id', userId),
     countEq('notifications', 'user_id', userId),
-    admin
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .is('read_at', null)
-      .then((r) => {
-        if (r.error) throw r.error;
-        return r.count ?? 0;
-      }),
+    safeCount(() =>
+      admin
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .is('read_at', null),
+    ),
     countEq('user_push_tokens', 'user_id', userId),
     hasActivity
-      ? admin
-          .from('user_activity_events')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('kind', 'app_open')
-          .then((r) => (r.error ? 0 : r.count ?? 0))
+      ? safeCount(() =>
+          admin
+            .from('user_activity_events')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('kind', 'app_open'),
+        )
       : Promise.resolve(0),
     hasActivity
-      ? admin
-          .from('user_activity_events')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('kind', 'app_open')
-          .gte('created_at', sinceToday)
-          .then((r) => (r.error ? 0 : r.count ?? 0))
+      ? safeCount(() =>
+          admin
+            .from('user_activity_events')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('kind', 'app_open')
+            .gte('created_at', sinceToday),
+        )
       : Promise.resolve(0),
     hasActivity
-      ? admin
-          .from('user_activity_events')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('kind', 'app_open')
-          .gte('created_at', since7d)
-          .then((r) => (r.error ? 0 : r.count ?? 0))
+      ? safeCount(() =>
+          admin
+            .from('user_activity_events')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('kind', 'app_open')
+            .gte('created_at', since7d),
+        )
       : Promise.resolve(0),
     hasActivity
-      ? admin
-          .from('user_activity_events')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('kind', 'app_open')
-          .gte('created_at', since30d)
-          .then((r) => (r.error ? 0 : r.count ?? 0))
+      ? safeCount(() =>
+          admin
+            .from('user_activity_events')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('kind', 'app_open')
+            .gte('created_at', since30d),
+        )
       : Promise.resolve(0),
     hasActivity
-      ? admin
-          .from('user_activity_events')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('kind', 'home_feed')
-          .then((r) => (r.error ? 0 : r.count ?? 0))
+      ? safeCount(() =>
+          admin
+            .from('user_activity_events')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('kind', 'home_feed'),
+        )
       : Promise.resolve(0),
     hasActivity
-      ? admin
-          .from('user_activity_events')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('kind', 'notifications_open')
-          .then((r) => (r.error ? 0 : r.count ?? 0))
+      ? safeCount(() =>
+          admin
+            .from('user_activity_events')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('kind', 'notifications_open'),
+        )
       : Promise.resolve(0),
     admin
       .from('posts')
@@ -477,17 +513,30 @@ export async function fetchUserActivityDetail(
           .order('created_at', { ascending: false })
           .limit(12)
       : Promise.resolve({
-          data: [] as { created_at: string; meta: Record<string, unknown> | null }[],
+          data: [] as ActivityOpenRow[],
           error: null,
         }),
   ]);
 
-  if (postsSeriesRows.error) throw postsSeriesRows.error;
-  if (stampsSeriesRows.error) throw stampsSeriesRows.error;
-  if (opensSeriesRows.error) throw opensSeriesRows.error;
-  if (notifKinds.error) throw notifKinds.error;
-  if (recentPosts.error) throw recentPosts.error;
-  if (recentOpens.error) throw recentOpens.error;
+  if (postsSeriesRows.error && !isMissingRelation(postsSeriesRows.error)) {
+    throw postsSeriesRows.error;
+  }
+  if (stampsSeriesRows.error && !isMissingRelation(stampsSeriesRows.error)) {
+    throw stampsSeriesRows.error;
+  }
+  if (notifKinds.error && !isMissingRelation(notifKinds.error)) {
+    throw notifKinds.error;
+  }
+  if (recentPosts.error && !isMissingRelation(recentPosts.error)) {
+    throw recentPosts.error;
+  }
+
+  const openSeriesData = isMissingRelation(opensSeriesRows.error)
+    ? []
+    : ((opensSeriesRows.data ?? []) as { created_at: string }[]);
+  const recentOpenData = isMissingRelation(recentOpens.error)
+    ? []
+    : ((recentOpens.data ?? []) as ActivityOpenRow[]);
 
   const kindCounts = new Map<string, number>();
   for (const row of notifKinds.data ?? []) {
@@ -519,13 +568,10 @@ export async function fetchUserActivityDetail(
       isVerifiedStudent: Boolean(profile.is_verified_student),
     },
     auth: {
-      lastSignInAt: authUser.data.user?.last_sign_in_at ?? null,
+      lastSignInAt,
       email:
-        profile.login_email ||
-        profile.student_email ||
-        authUser.data.user?.email ||
-        null,
-      phone: profile.phone_number || authUser.data.user?.phone || null,
+        profile.login_email || profile.student_email || authEmail || null,
+      phone: profile.phone_number || authPhone || null,
     },
     totals: {
       posts: postsTotal,
@@ -557,9 +603,15 @@ export async function fetchUserActivityDetail(
       avgAppOpensPerDay7d: Math.round((appOpens7d / 7) * 10) / 10,
     },
     series: {
-      appOpensByDay: fillSeries(opensSeriesRows.data ?? [], 30),
-      postsByDay: fillSeries(postsSeriesRows.data ?? [], 30),
-      stampsByDay: fillSeries(stampsSeriesRows.data ?? [], 30),
+      appOpensByDay: fillSeries(openSeriesData, 30),
+      postsByDay: fillSeries(
+        (postsSeriesRows.data ?? []) as { created_at: string }[],
+        30,
+      ),
+      stampsByDay: fillSeries(
+        (stampsSeriesRows.data ?? []) as { created_at: string }[],
+        30,
+      ),
     },
     notificationsByKind: Array.from(kindCounts.entries())
       .map(([kind, count]) => ({ kind, count }))
@@ -571,17 +623,15 @@ export async function fetchUserActivityDetail(
         caption: (p.caption || '').slice(0, 120),
         createdAt: p.created_at,
       })),
-      appOpens: (recentOpens.data ?? []).map(
-        (r: { created_at: string; meta: Record<string, unknown> | null }) => ({
-          createdAt: r.created_at,
-          source:
-            typeof r.meta?.source === 'string'
-              ? r.meta.source
-              : typeof r.meta?.platform === 'string'
-                ? r.meta.platform
-                : 'app',
-        }),
-      ),
+      appOpens: recentOpenData.map((r) => ({
+        createdAt: r.created_at,
+        source:
+          typeof r.meta?.source === 'string'
+            ? r.meta.source
+            : typeof r.meta?.platform === 'string'
+              ? r.meta.platform
+              : 'app',
+      })),
     },
     activityTrackingEnabled: hasActivity,
   };

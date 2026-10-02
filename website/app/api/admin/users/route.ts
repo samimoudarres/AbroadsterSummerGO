@@ -15,7 +15,14 @@ export async function GET() {
     return NextResponse.json({ ok: true, users });
   } catch (err) {
     const message =
-      err instanceof Error ? err.message : 'Failed to load users';
+      err instanceof Error
+        ? err.message
+        : err &&
+            typeof err === 'object' &&
+            'message' in err &&
+            typeof (err as { message: unknown }).message === 'string'
+          ? (err as { message: string }).message
+          : 'Failed to load users';
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

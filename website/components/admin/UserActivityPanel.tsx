@@ -76,7 +76,10 @@ export function UserActivityPanel({
         };
         if (cancelled) return;
         if (!res.ok || !data.ok || !data.detail) {
-          setError(data.error || 'Could not load user activity.');
+          setError(
+            data.error ||
+              `Could not load user activity (${res.status}).`,
+          );
           setDetail(null);
           return;
         }
