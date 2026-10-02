@@ -234,7 +234,10 @@ export async function fetchUsersActivityList(): Promise<UserListRow[]> {
   if (pushTokens.error) throw pushTokens.error;
   if (appOpens.error) throw appOpens.error;
 
-  const countMap = (rows: { [k: string]: string }[] | null, key: string) => {
+  const countMap = (
+    rows: Record<string, string | null | undefined>[] | null,
+    key: string,
+  ) => {
     const m = new Map<string, number>();
     for (const row of rows ?? []) {
       const id = row[key];
@@ -244,10 +247,22 @@ export async function fetchUsersActivityList(): Promise<UserListRow[]> {
     return m;
   };
 
-  const postCounts = countMap(posts.data as any, 'author_id');
-  const stampCounts = countMap(stamps.data as any, 'user_id');
-  const messageCounts = countMap(messages.data as any, 'sender_id');
-  const openCounts = countMap(appOpens.data as any, 'user_id');
+  const postCounts = countMap(
+    (posts.data ?? []) as Record<string, string>[],
+    'author_id',
+  );
+  const stampCounts = countMap(
+    (stamps.data ?? []) as Record<string, string>[],
+    'user_id',
+  );
+  const messageCounts = countMap(
+    (messages.data ?? []) as Record<string, string>[],
+    'sender_id',
+  );
+  const openCounts = countMap(
+    (appOpens.data ?? []) as Record<string, string>[],
+    'user_id',
+  );
   const pushSet = new Set((pushTokens.data ?? []).map((r) => r.user_id));
   const signInById = new Map(
     (authUsers.data?.users ?? []).map((u) => [u.id, u.last_sign_in_at ?? null]),
@@ -461,7 +476,10 @@ export async function fetchUserActivityDetail(
           .eq('kind', 'app_open')
           .order('created_at', { ascending: false })
           .limit(12)
-      : Promise.resolve({ data: [] as any[], error: null }),
+      : Promise.resolve({
+          data: [] as { created_at: string; meta: Record<string, unknown> | null }[],
+          error: null,
+        }),
   ]);
 
   if (postsSeriesRows.error) throw postsSeriesRows.error;
@@ -553,15 +571,17 @@ export async function fetchUserActivityDetail(
         caption: (p.caption || '').slice(0, 120),
         createdAt: p.created_at,
       })),
-      appOpens: (recentOpens.data ?? []).map((r: any) => ({
-        createdAt: r.created_at,
-        source:
-          typeof r.meta?.source === 'string'
-            ? r.meta.source
-            : typeof r.meta?.platform === 'string'
-              ? r.meta.platform
-              : 'app',
-      })),
+      appOpens: (recentOpens.data ?? []).map(
+        (r: { created_at: string; meta: Record<string, unknown> | null }) => ({
+          createdAt: r.created_at,
+          source:
+            typeof r.meta?.source === 'string'
+              ? r.meta.source
+              : typeof r.meta?.platform === 'string'
+                ? r.meta.platform
+                : 'app',
+        }),
+      ),
     },
     activityTrackingEnabled: hasActivity,
   };
