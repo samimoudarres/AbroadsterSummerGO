@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { DashboardStats } from '@/lib/admin/stats';
+import type { UserListRow } from '@/lib/admin/userActivity';
+import { UserActivityPanel } from './UserActivityPanel';
 import styles from '../../app/admin/admin.module.css';
 
 const SUPABASE_PROJECT_URL =
@@ -12,7 +14,8 @@ function formatNumber(n: number) {
   return new Intl.NumberFormat('en-US').format(n);
 }
 
-function formatWhen(iso: string) {
+function formatWhen(iso: string | null | undefined) {
+  if (!iso) return '—';
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
@@ -42,29 +45,44 @@ function StatCard({
 export function AdminDashboard() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [users, setUsers] = useState<UserListRow[]>([]);
+  const [userQuery, setUserQuery] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/stats', { cache: 'no-store' });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        stats?: DashboardStats;
-        error?: string;
-      };
+      const [statsRes, usersRes] = await Promise.all([
+        fetch('/api/admin/stats', { cache: 'no-store' }),
+        fetch('/api/admin/users', { cache: 'no-store' }),
+      ]);
 
-      if (res.status === 401) {
+      if (statsRes.status === 401 || usersRes.status === 401) {
         router.replace('/admin/login');
         return;
       }
 
-      if (!res.ok || !data.ok || !data.stats) {
-        setError(data.error || 'Could not load dashboard stats.');
+      const statsData = (await statsRes.json()) as {
+        ok?: boolean;
+        stats?: DashboardStats;
+        error?: string;
+      };
+      const usersData = (await usersRes.json()) as {
+        ok?: boolean;
+        users?: UserListRow[];
+        error?: string;
+      };
+
+      if (!statsRes.ok || !statsData.ok || !statsData.stats) {
+        setError(statsData.error || 'Could not load dashboard stats.');
         return;
       }
 
-      setStats(data.stats);
+      setStats(statsData.stats);
+      if (usersRes.ok && usersData.ok && usersData.users) {
+        setUsers(usersData.users);
+      }
       setError('');
     } catch {
       setError('Network error while loading stats.');
@@ -85,6 +103,17 @@ export function AdminDashboard() {
     if (!stats) return 1;
     return Math.max(1, ...stats.users.signupsByDay.map((d) => d.count));
   }, [stats]);
+
+  const filteredUsers = useMemo(() => {
+    const q = userQuery.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter(
+      (u) =>
+        u.name.toLowerCase().includes(q) ||
+        u.school.toLowerCase().includes(q) ||
+        u.program.toLowerCase().includes(q),
+    );
+  }, [users, userQuery]);
 
   async function onLogout() {
     await fetch('/api/admin/logout', { method: 'POST' });
@@ -133,7 +162,11 @@ export function AdminDashboard() {
             <StatCard label="Signups (24h)" value={stats.users.last24h} />
             <StatCard label="Signups (7d)" value={stats.users.last7d} />
             <StatCard label="Signups (30d)" value={stats.users.last30d} />
-            <StatCard label="Trips" value={stats.engagement.trips} hint={`${stats.engagement.tripsUpcoming} upcoming/planning`} />
+            <StatCard
+              label="Trips"
+              value={stats.engagement.trips}
+              hint={`${stats.engagement.tripsUpcoming} upcoming/planning`}
+            />
             <StatCard label="Posts" value={stats.engagement.posts} />
             <StatCard label="Messages" value={stats.engagement.messages} />
             <StatCard label="Friendships" value={stats.engagement.friendships} />
@@ -170,6 +203,72 @@ export function AdminDashboard() {
             </div>
           </section>
 
+          <section className={styles.panel}>
+            <div className={styles.panelHeaderRow}>
+              <div>
+                <h2 className={styles.panelTitle}>Users & activity</h2>
+                <p className={styles.subtitle}>
+                  Click any user for posts, stamps, messages, notifications, and app opens.
+                </p>
+              </div>
+              <input
+                className={styles.searchInput}
+                type="search"
+                placeholder="Search name, school, program…"
+                value={userQuery}
+                onChange={(e) => setUserQuery(e.target.value)}
+                aria-label="Search users"
+              />
+            </div>
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Home school</th>
+                    <th>Program</th>
+                    <th>Posts</th>
+                    <th>Stamps</th>
+                    <th>Messages</th>
+                    <th>Opens (7d)</th>
+                    <th>Last active</th>
+                    <th>Push</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((row) => (
+                    <tr
+                      key={row.id}
+                      className={styles.clickRow}
+                      onClick={() => setSelectedUserId(row.id)}
+                    >
+                      <td>
+                        <button
+                          type="button"
+                          className={styles.linkBtn}
+                          onClick={() => setSelectedUserId(row.id)}
+                        >
+                          {row.name}
+                        </button>
+                      </td>
+                      <td>{row.school}</td>
+                      <td>{row.program}</td>
+                      <td>{row.posts}</td>
+                      <td>{row.stampsGiven}</td>
+                      <td>{row.messages}</td>
+                      <td>{row.appOpens7d}</td>
+                      <td>{formatWhen(row.lastActiveAt || row.lastSignInAt)}</td>
+                      <td>{row.hasPush ? 'Yes' : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {filteredUsers.length === 0 ? (
+              <p className={styles.empty}>No users match that search.</p>
+            ) : null}
+          </section>
+
           <div className={styles.split}>
             <section className={styles.panel}>
               <h2 className={styles.panelTitle}>Recent signups</h2>
@@ -185,8 +284,20 @@ export function AdminDashboard() {
                   </thead>
                   <tbody>
                     {stats.users.recent.map((row) => (
-                      <tr key={row.id}>
-                        <td>{row.name}</td>
+                      <tr
+                        key={row.id}
+                        className={styles.clickRow}
+                        onClick={() => setSelectedUserId(row.id)}
+                      >
+                        <td>
+                          <button
+                            type="button"
+                            className={styles.linkBtn}
+                            onClick={() => setSelectedUserId(row.id)}
+                          >
+                            {row.name}
+                          </button>
+                        </td>
                         <td>{row.school}</td>
                         <td>{row.program}</td>
                         <td>{formatWhen(row.createdAt)}</td>
@@ -258,6 +369,13 @@ export function AdminDashboard() {
             )}
           </section>
         </>
+      ) : null}
+
+      {selectedUserId ? (
+        <UserActivityPanel
+          userId={selectedUserId}
+          onClose={() => setSelectedUserId(null)}
+        />
       ) : null}
     </div>
   );

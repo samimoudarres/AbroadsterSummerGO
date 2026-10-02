@@ -156,6 +156,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [session?.userId]);
 
+  useEffect(() => {
+    if (!session?.userId) return;
+    let stop: (() => void) | undefined;
+    void import('../analytics/recordActivity').then((m) => {
+      stop = m.startAppOpenTracking();
+    });
+    return () => {
+      stop?.();
+    };
+  }, [session?.userId]);
+
   const signUp = useCallback(async (draft: SignupDraft) => {
     const s = await signUpWithDraft(draft);
     await ensureSchoolChats();

@@ -5,10 +5,12 @@ import {
   FlatList,
   Image,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { colors, fonts } from '../../constants/theme';
@@ -19,6 +21,10 @@ import { timeAgo } from '../../lib/feed/timeAgo';
 import { toImageSource } from '../../lib/images';
 import { usePhoneTopPad } from '../../lib/layout/safeArea';
 import type { SuggestedAccount } from '../../lib/social/suggestAccounts';
+import {
+  INVITE_FRIENDS_KIND,
+  INVITE_SHARE_MESSAGE,
+} from '../../lib/social/inviteFriends';
 import { Avatar } from '../common/Avatar';
 
 export type NotificationNav =
@@ -59,11 +65,17 @@ const GROUPS: GroupDef[] = [
     kinds: ['dm_message', 'channel_message'],
   },
   { id: 'stamps', title: 'Stamps', kinds: ['post_stamped'] },
+  { id: 'comments', title: 'Comments', kinds: ['post_commented'] },
   { id: 'tagged', title: 'Tagged', kinds: ['post_tagged'] },
   {
     id: 'friends',
     title: 'Friends',
     kinds: ['friend_added', 'friend_nearby'],
+  },
+  {
+    id: 'welcome',
+    title: 'Getting started',
+    kinds: ['invite_friends'],
   },
   {
     id: 'invites',
@@ -231,6 +243,9 @@ export function NotificationsScreen({
     let cancelled = false;
     const load = async () => {
       await initChat();
+      void import('../../lib/analytics/recordActivity')
+        .then((m) => m.recordUserActivity('notifications_open'))
+        .catch(() => {});
       const list = await chatRepo.getNotifications();
       if (cancelled) return;
       setItems(list);
@@ -316,9 +331,42 @@ export function NotificationsScreen({
     return out;
   }, [items, expanded]);
 
+  const shareInviteFriends = async () => {
+    try {
+      await Clipboard.setStringAsync(INVITE_SHARE_MESSAGE);
+    } catch {
+      // still try share sheet
+    }
+    try {
+      // iOS: message alone opens the system share sheet with the full copy
+      // (including App Store URL). Passing a separate `url` can drop the text.
+      const result = await Share.share({
+        message: INVITE_SHARE_MESSAGE,
+        title: 'Invite friends to Abroadster',
+      });
+      if (
+        result.action === Share.dismissedAction &&
+        !(await Clipboard.getStringAsync())
+      ) {
+        await Clipboard.setStringAsync(INVITE_SHARE_MESSAGE);
+      }
+    } catch {
+      try {
+        await Clipboard.setStringAsync(INVITE_SHARE_MESSAGE);
+      } catch {
+        // ignore
+      }
+      Alert.alert('Copied', 'Invite link copied to your clipboard.');
+    }
+  };
+
   const onTap = (n: ChatNotification) => {
     void markOneRead(n);
     const d = (n.data ?? {}) as Record<string, unknown>;
+    if (n.kind === INVITE_FRIENDS_KIND || n.kind === 'invite_friends') {
+      void shareInviteFriends();
+      return;
+    }
     if (n.kind === 'dm_message') {
       const uid = actorId(n);
       const threadId = dataStr(d, 'threadId', 'thread_id');
@@ -334,7 +382,7 @@ export function NotificationsScreen({
       }
       return;
     }
-    if (n.kind === 'post_tagged' || n.kind === 'post_stamped') {
+    if (n.kind === 'post_tagged' || n.kind === 'post_stamped' || n.kind === 'post_commented') {
       const postId = dataStr(d, 'postId', 'post_id');
       if (postId) onNavigate({ type: 'post', postId });
       return;
@@ -588,6 +636,8 @@ export function NotificationsScreen({
             !status;
           const showJoinActions =
             item.kind === 'trip_join_request' && !status;
+          const showInviteFriends =
+            item.kind === INVITE_FRIENDS_KIND || item.kind === 'invite_friends';
           const busy = busyId === item.id;
 
           return (
@@ -595,7 +645,13 @@ export function NotificationsScreen({
               style={[styles.row, unread && styles.rowUnread]}
               onPress={() => onTap(item)}
             >
-              <Avatar source={profile?.avatar} size={44} />
+              {showInviteFriends ? (
+                <View style={styles.inviteIconWrap}>
+                  <Ionicons name="people" size={22} color={colors.white} />
+                </View>
+              ) : (
+                <Avatar source={profile?.avatar} size={44} />
+              )}
               <View style={styles.body}>
                 <Text
                   style={[styles.rowTitle, unread && styles.rowTitleUnread]}
@@ -611,6 +667,25 @@ export function NotificationsScreen({
                   </Text>
                 ) : null}
                 <Text style={styles.ago}>{timeAgo(item.createdAt)}</Text>
+                {showInviteFriends ? (
+                  <View style={styles.actions}>
+                    <Pressable
+                      style={[styles.actionBtn, styles.acceptBtn]}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        void markOneRead(item);
+                        void shareInviteFriends();
+                      }}
+                    >
+                      <Ionicons
+                        name="share-outline"
+                        size={16}
+                        color={colors.white}
+                      />
+                      <Text style={styles.acceptText}>Share invite</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
                 {status ? (
                   <Text style={styles.statusNote}>
                     {status === 'accepted' ? 'Accepted' : 'Declined'}
@@ -660,6 +735,23 @@ export function NotificationsScreen({
                   source={toImageSource(previewUrl)}
                   style={styles.previewThumb}
                 />
+              ) : showInviteFriends ? (
+                <Pressable
+                  style={styles.inviteShareIcon}
+                  hitSlop={10}
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    void markOneRead(item);
+                    void shareInviteFriends();
+                  }}
+                  accessibilityLabel="Share invite"
+                >
+                  <Ionicons
+                    name="share-outline"
+                    size={22}
+                    color={colors.openJoin}
+                  />
+                </Pressable>
               ) : unread && !status ? (
                 <View style={styles.dot} />
               ) : null}
@@ -819,6 +911,22 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: colors.divider,
   },
+  inviteIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.brandTeal,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteShareIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8F4F3',
+  },
   statusNote: {
     fontFamily: fonts.bold,
     fontSize: 12,
@@ -843,16 +951,18 @@ const styles = StyleSheet.create({
   },
   acceptBtn: {
     backgroundColor: colors.brandTeal,
-  },
-  declineText: {
-    fontFamily: fonts.bold,
-    fontSize: 13,
-    color: colors.black,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   acceptText: {
     fontFamily: fonts.bold,
     fontSize: 13,
     color: '#fff',
+  },
+  declineText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.black,
   },
   dot: {
     width: 8,
