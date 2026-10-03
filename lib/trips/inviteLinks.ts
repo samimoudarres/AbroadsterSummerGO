@@ -3,7 +3,7 @@ import { shortCalendarRange } from './dates';
 
 /** App Store listing for Abroadster (ASC App Apple ID). */
 export const APP_STORE_URL =
-  'https://apps.apple.com/app/id6800081262';
+  'https://apps.apple.com/us/app/abroadster-student-network/id6800081262';
 
 const LEGAL_BASE = (
   process.env.EXPO_PUBLIC_LEGAL_BASE_URL ||

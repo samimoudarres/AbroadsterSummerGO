@@ -23,6 +23,7 @@ import type {
   PassportCityRank,
   PassportData,
   PollData,
+  PostComment,
   TripChannel,
 } from '../../data/chatTypes';
 import { shortWeekdayRange, tripChatTitle } from '../trips/dates';
@@ -1069,17 +1070,6 @@ export const chatRepo = {
     row.home_accent = homeVisual.accent;
     row.abroad_accent = abroadVisual.accent;
 
-    const clientMiles = computeExplorerScoreMiles({
-      homeUniversity: nextHome,
-      studyAbroadProgram: nextAbroad,
-      hostCity:
-        patch.hostCity !== undefined ? patch.hostCity : me.hostCity,
-      hostCountry:
-        patch.hostCountry !== undefined ? patch.hostCountry : me.hostCountry,
-      trips: [],
-    });
-    if (clientMiles > 0) row.explorer_score_miles = clientMiles;
-
     const { error } = await supabase
       .from('profiles')
       .update(row)
@@ -1091,11 +1081,25 @@ export const chatRepo = {
     } catch {
       // optional if migration not applied
     }
-    if (clientMiles > 0) {
+    // Always sync with client-accurate miles (home→abroad + trip legs).
+    // Covers gaps until SQL explorer_lookup_point includes all schools.
+    try {
+      const trips = await this.listExplorerTripsForUser(me.id);
+      const clientMiles = computeExplorerScoreMiles({
+        homeUniversity: nextHome,
+        studyAbroadProgram: nextAbroad,
+        hostCity:
+          patch.hostCity !== undefined ? patch.hostCity : me.hostCity,
+        hostCountry:
+          patch.hostCountry !== undefined ? patch.hostCountry : me.hostCountry,
+        trips,
+      });
       await supabase
         .from('profiles')
-        .update({ explorer_score_miles: clientMiles })
+        .update({ explorer_score_miles: Math.max(0, Math.round(clientMiles)) })
         .eq('id', me.id);
+    } catch {
+      // non-fatal
     }
     try {
       await supabase.rpc('passport_ensure_host_city', { p_user_id: me.id });
@@ -1563,8 +1567,12 @@ export const chatRepo = {
   },
 
   async getNotifications() {
-    if (!(await useLive())) return demoChat.getNotifications();
+    if (!(await useLive())) {
+      return demoChat.getNotifications();
+    }
     const me = await this.getMe();
+    // Do NOT seed invite notifications here — that blasted existing users.
+    // New accounts get invite_friends via profiles AFTER INSERT trigger only.
     const { data } = await supabase!
       .from('notifications')
       .select('*')
@@ -1581,6 +1589,11 @@ export const chatRepo = {
       readAt: n.read_at,
       createdAt: n.created_at,
     }));
+  },
+
+  /** @deprecated Prefer DB trigger on profile insert — do not call for existing users. */
+  async ensureInviteFriendsNotification(_userId?: string): Promise<void> {
+    // Intentionally no-op: seeding existing accounts was unwanted.
   },
 
   async getUnreadNotificationCount(): Promise<number> {
@@ -1643,32 +1656,101 @@ export const chatRepo = {
         );
       };
 
+      let ranked: FeedPost[];
       if (!allowDemoSeedMerge()) {
-        return (await rankLive(live)).slice(0, limit);
+        ranked = await rankLive(live);
+      } else {
+        // Hybrid: keep RPC relevance order for live posts; only top-up with demo
+        // after re-ranking the combined set with the same formula.
+        const demo = (await demoChat.listHomeFeed(limit, offset)).filter(
+          (p) => !blocked.has(p.authorId),
+        );
+        if (!live.length) {
+          ranked = demo;
+        } else {
+          const seen = new Set(live.map((p) => p.id));
+          const merged = [...live, ...demo.filter((p) => !seen.has(p.id))];
+          try {
+            ranked = await rankLive(merged);
+          } catch {
+            ranked = merged.sort(
+              (a, b) =>
+                new Date(b.createdAt).getTime() -
+                new Date(a.createdAt).getTime(),
+            );
+          }
+        }
       }
 
-      // Hybrid: keep RPC relevance order for live posts; only top-up with demo
-      // after re-ranking the combined set with the same formula.
-      const demo = (await demoChat.listHomeFeed(limit, offset)).filter(
-        (p) => !blocked.has(p.authorId),
-      );
-      if (!live.length) return demo;
-      const seen = new Set(live.map((p) => p.id));
-      const merged = [...live, ...demo.filter((p) => !seen.has(p.id))];
-      try {
-        return (await rankLive(merged)).slice(0, limit);
-      } catch {
-        return merged
-          .sort(
-            (a, b) =>
-              new Date(b.createdAt).getTime() -
-              new Date(a.createdAt).getTime(),
-          )
-          .slice(0, limit);
+      // First page only: optionally interleave Abroadster onboarding posts.
+      if (offset === 0) {
+        try {
+          const {
+            applyCuratedOnboardingFeed,
+            getHomeFeedVisitCount,
+            isCuratedHomeFeedVisit,
+          } = await import('../feed/homeFeedOnboarding');
+          const {
+            ABROADSTER_CURATED_POST_IDS,
+          } = await import('../social/abroadsterOfficial');
+          const visits = await getHomeFeedVisitCount(me.id);
+          if (isCuratedHomeFeedVisit(visits)) {
+            const ids = Object.values(ABROADSTER_CURATED_POST_IDS);
+            const official = (
+              await Promise.all(ids.map((id) => this.getPost(id)))
+            ).filter(Boolean) as FeedPost[];
+            ranked = applyCuratedOnboardingFeed(ranked, official);
+          }
+        } catch {
+          // curation is best-effort
+        }
       }
+
+      return ranked.slice(0, limit);
     } catch {
       if (!allowDemoSeedMerge()) return [];
       return demoChat.listHomeFeed(limit, offset);
+    }
+  },
+
+  /** Locked-in trips for explorer score (member of + status upcoming). */
+  async listExplorerTripsForUser(
+    userId: string,
+  ): Promise<
+    {
+      status: 'upcoming' | 'planning';
+      destinationCity: string;
+      destinationCountry: string;
+      latitude?: number | null;
+      longitude?: number | null;
+    }[]
+  > {
+    if (!(await useLive()) || !isUuid(userId)) return [];
+    try {
+      const { data: memberRows } = await supabase!
+        .from('trip_members')
+        .select('trip_id')
+        .eq('user_id', userId);
+      const tripIds = (memberRows ?? [])
+        .map((r: any) => r.trip_id as string)
+        .filter(Boolean);
+      if (!tripIds.length) return [];
+      const { data: trips } = await supabase!
+        .from('trips')
+        .select(
+          'destination_city, destination_country, status, latitude, longitude',
+        )
+        .in('id', tripIds)
+        .eq('status', 'upcoming');
+      return (trips ?? []).map((t: any) => ({
+        status: 'upcoming' as const,
+        destinationCity: t.destination_city ?? '',
+        destinationCountry: t.destination_country ?? '',
+        latitude: t.latitude,
+        longitude: t.longitude,
+      }));
+    } catch {
+      return [];
     }
   },
 
@@ -1728,7 +1810,16 @@ export const chatRepo = {
     }
     notifyChatListeners();
     demoChat.notify();
-    return mapFeedPostRow(data);
+    const mapped = mapFeedPostRow(data);
+    if (input.commentsDisabled) {
+      try {
+        await this.setPostCommentsDisabled(mapped.id, true);
+        mapped.commentsDisabled = true;
+      } catch {
+        // Column / RPC may be missing until migration 056
+      }
+    }
+    return mapped;
   },
 
   async deletePost(postId: string): Promise<void> {
@@ -1796,6 +1887,13 @@ export const chatRepo = {
       p_audience_community_ids: onlyUuids(input.audienceCommunityIds),
     });
     if (error) throw error;
+    if (typeof input.commentsDisabled === 'boolean') {
+      try {
+        await this.setPostCommentsDisabled(postId, input.commentsDisabled);
+      } catch {
+        // ignore until 056
+      }
+    }
     const full = await this.getPost(postId);
     if (!full) throw new Error('Post updated but could not reload');
     notifyChatListeners();
@@ -2032,7 +2130,14 @@ export const chatRepo = {
           };
         },
       );
-      if (!allowDemoSeedMerge()) return live;
+      if (!allowDemoSeedMerge()) {
+        const today = new Date().toISOString().slice(0, 10);
+        return live.filter((a) => {
+          const end = (a.dateEnd || a.dateStart || '').slice(0, 10);
+          if (!end) return true;
+          return end <= today;
+        });
+      }
       const demo = await demoChat.listAuthorAlbums(userId, limit);
       if (!live.length) return demo;
       const seen = new Set(live.map((a) => a.tripId));
@@ -2131,21 +2236,39 @@ export const chatRepo = {
   async uploadTripAlbumPhotos(
     tripId: string,
     localUris: string[],
+    opts?: { onProgress?: (done: number, total: number) => void },
   ): Promise<AlbumPhoto[]> {
     if (!localUris.length) return [];
     if (!(await useLive()) || !isUuid(tripId)) {
       return demoChat.uploadTripAlbumPhotos(tripId, localUris);
     }
     const me = await this.getMe();
-    const urls = await mapPool(localUris, 3, (uri, i) =>
-      uploadAlbumPhoto(me.id, uri, i),
-    );
-    const { data, error } = await supabase!.rpc('upload_album_photos', {
-      p_trip_id: tripId,
-      p_image_urls: urls,
+    const total = localUris.length;
+    const uploadedUrls: string[] = [];
+    // Low concurrency + chunked RPC: avoids OOM / crash on ~100 photo batches.
+    const CONCURRENCY = 2;
+    const RPC_CHUNK = 12;
+    let done = 0;
+
+    const urls = await mapPool(localUris, CONCURRENCY, async (uri, i) => {
+      const url = await uploadAlbumPhoto(me.id, uri, i);
+      done += 1;
+      opts?.onProgress?.(done, total);
+      return url;
     });
-    if (error) throw error;
+
+    for (let i = 0; i < urls.length; i += RPC_CHUNK) {
+      const chunk = urls.slice(i, i + RPC_CHUNK);
+      const { error } = await supabase!.rpc('upload_album_photos', {
+        p_trip_id: tripId,
+        p_image_urls: chunk,
+      });
+      if (error) throw error;
+      uploadedUrls.push(...chunk);
+    }
+
     demoChat.notify();
+    notifyChatListeners();
     return this.getTripAlbumPhotos(tripId);
   },
 
@@ -2543,26 +2666,149 @@ export const chatRepo = {
   async listDmThreads(): Promise<DmThread[]> {
     if (!(await useLive())) return demoChat.listDmThreads();
 
+    // Fast path: single RPC with preview + unread + other profile
+    try {
+      const { data, error } = await supabase!.rpc('list_dm_inbox');
+      if (!error && Array.isArray(data)) {
+        const blocked = new Set(await this.listBlockedEitherIds());
+        const live: DmThread[] = data
+          .map((row: any) => {
+            const otherUserId = String(row.other_user_id ?? '');
+            if (!otherUserId) return null;
+            const fullName =
+              (row.other_full_name as string)?.trim() ||
+              [row.other_first_name, row.other_last_name]
+                .filter(Boolean)
+                .join(' ')
+                .trim() ||
+              'Traveler';
+            const otherProfile: ChatProfile = {
+              id: otherUserId,
+              firstName: row.other_first_name ?? '',
+              lastName: row.other_last_name ?? '',
+              fullName,
+              avatar: row.other_avatar || defaultAvatarUrl(fullName),
+              homeUniversity: row.other_home_university ?? '',
+              studyAbroadProgram: row.other_study_abroad ?? '',
+              homeAccent: '#175864',
+              abroadAccent: '#E8A838',
+            };
+            return {
+              id: String(row.id),
+              otherUserId,
+              updatedAt: row.updated_at ?? new Date().toISOString(),
+              lastPreview: row.last_preview ?? '',
+              unreadCount: Number(row.unread_count ?? 0),
+              otherProfile,
+            } satisfies DmThread;
+          })
+          .filter(Boolean) as DmThread[];
+        const visible = live.filter((t) => !blocked.has(t.otherUserId));
+        if (!allowDemoSeedMerge()) {
+          return visible.sort(
+            (a, b) =>
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+          );
+        }
+        const demoThreads = (await demoChat.listDmThreads()).filter(
+          (t) => !blocked.has(t.otherUserId),
+        );
+        const seen = new Set(visible.map((t) => t.id));
+        return [...visible, ...demoThreads.filter((t) => !seen.has(t.id))].sort(
+          (a, b) =>
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+        );
+      }
+    } catch {
+      // fall through to legacy path until migration 056
+    }
+
     const me = await this.getMe();
     const { data: parts } = await supabase!
       .from('dm_participants')
-      .select('thread_id, dm_threads(*)')
+      .select('thread_id, last_read_at, dm_threads(updated_at)')
       .eq('user_id', me.id);
+    const threadIds = (parts ?? [])
+      .map((r: any) => r.thread_id as string)
+      .filter(Boolean);
+    if (!threadIds.length) {
+      if (!allowDemoSeedMerge()) return [];
+      return demoChat.listDmThreads();
+    }
+
+    const { data: others } = await supabase!
+      .from('dm_participants')
+      .select('thread_id, user_id')
+      .in('thread_id', threadIds)
+      .neq('user_id', me.id);
+
+    const otherByThread = new Map<string, string>();
+    for (const row of others ?? []) {
+      otherByThread.set(
+        (row as any).thread_id as string,
+        (row as any).user_id as string,
+      );
+    }
+
+    const { data: recentMsgs } = await supabase!
+      .from('messages')
+      .select('dm_thread_id, body, kind, created_at, sender_id')
+      .in('dm_thread_id', threadIds)
+      .order('created_at', { ascending: false })
+      .limit(Math.min(threadIds.length * 8, 400));
+
+    const lastByThread = new Map<string, any>();
+    const unreadByThread = new Map<string, number>();
+    const lastReadByThread = new Map<string, string | null>();
+    for (const row of parts ?? []) {
+      lastReadByThread.set(
+        (row as any).thread_id,
+        (row as any).last_read_at ?? null,
+      );
+    }
+    for (const m of recentMsgs ?? []) {
+      const tid = (m as any).dm_thread_id as string;
+      if (!lastByThread.has(tid)) lastByThread.set(tid, m);
+      const lastRead = lastReadByThread.get(tid);
+      const sender = (m as any).sender_id as string | null;
+      const created = (m as any).created_at as string;
+      if (
+        sender &&
+        sender !== me.id &&
+        (!lastRead || new Date(created).getTime() > new Date(lastRead).getTime())
+      ) {
+        unreadByThread.set(tid, (unreadByThread.get(tid) ?? 0) + 1);
+      }
+    }
+
     const liveThreads: DmThread[] = [];
     for (const row of parts ?? []) {
-      const threadId = (row as any).thread_id;
-      const { data: others } = await supabase!
-        .from('dm_participants')
-        .select('user_id')
-        .eq('thread_id', threadId)
-        .neq('user_id', me.id);
-      const otherUserId = others?.[0]?.user_id;
+      const threadId = (row as any).thread_id as string;
+      const otherUserId = otherByThread.get(threadId);
       if (!otherUserId) continue;
+      const last = lastByThread.get(threadId);
       const meta = (row as any).dm_threads;
+      let lastPreview = '';
+      if (last) {
+        lastPreview =
+          (last.body as string)?.trim() ||
+          (last.kind === 'image'
+            ? 'Photo'
+            : last.kind === 'post'
+              ? 'Shared a post'
+              : last.kind === 'trip'
+                ? 'Shared a trip'
+                : 'Message');
+      }
       liveThreads.push({
         id: threadId,
         otherUserId,
-        updatedAt: meta?.updated_at ?? new Date().toISOString(),
+        updatedAt:
+          last?.created_at ??
+          meta?.updated_at ??
+          new Date().toISOString(),
+        lastPreview: lastPreview.slice(0, 120),
+        unreadCount: unreadByThread.get(threadId) ?? 0,
       });
     }
     const blocked = new Set(await this.listBlockedEitherIds());
@@ -2580,6 +2826,46 @@ export const chatRepo = {
     return merged.sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
+  },
+
+  async markDmThreadRead(threadId: string): Promise<void> {
+    if (!(await useLive()) || !isUuid(threadId)) {
+      await demoChat.markDmThreadRead(threadId);
+      return;
+    }
+    try {
+      await supabase!.rpc('mark_dm_thread_read', { p_thread_id: threadId });
+    } catch {
+      try {
+        await supabase!
+          .from('dm_participants')
+          .update({ last_read_at: new Date().toISOString() })
+          .eq('thread_id', threadId);
+      } catch {
+        // column may not exist yet
+      }
+    }
+    // Also mark matching notification rows if RPC didn't
+    try {
+      const notes = await this.getNotifications();
+      const ids = notes
+        .filter((n) => {
+          if (n.kind !== 'dm_message' || n.readAt) return false;
+          const d = n.data as Record<string, unknown> | undefined;
+          const tid = String(d?.thread_id ?? d?.threadId ?? '');
+          return tid === threadId;
+        })
+        .map((n) => n.id);
+      if (ids.length) await this.markNotificationsRead(ids);
+    } catch {
+      // ignore
+    }
+    notifyChatListeners();
+  },
+
+  async countDmUnread(): Promise<number> {
+    const threads = await this.listDmThreads();
+    return threads.reduce((sum, t) => sum + (t.unreadCount ?? 0), 0);
   },
 
   /**
@@ -2658,11 +2944,111 @@ export const chatRepo = {
       { thread_id: thread.id, user_id: otherUserId },
     ]);
     if (partErr) throw partErr;
+    notifyChatListeners();
     return {
       id: thread.id,
       otherUserId,
-      updatedAt: thread.updated_at,
+      updatedAt: thread.updated_at ?? new Date().toISOString(),
     };
+  },
+
+  async listPostComments(postId: string): Promise<PostComment[]> {
+    if (!(await useLive()) || !isUuid(postId)) {
+      return demoChat.listPostComments(postId);
+    }
+    try {
+      const { data, error } = await supabase!.rpc('list_post_comments', {
+        p_post_id: postId,
+        p_limit: 100,
+      });
+      if (!error && Array.isArray(data)) {
+        return data.map((row: any) => mapPostCommentRow(row));
+      }
+    } catch {
+      // fall through
+    }
+    const { data, error } = await supabase!
+      .from('post_comments')
+      .select('*')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true })
+      .limit(100);
+    if (error) {
+      if (/does not exist|relation/i.test(error.message || '')) return [];
+      throw error;
+    }
+    const authorIds = [
+      ...new Set((data ?? []).map((r: any) => r.author_id as string)),
+    ];
+    const profiles = await Promise.all(
+      authorIds.map((id) => this.getProfile(id)),
+    );
+    const byId = new Map(profiles.filter(Boolean).map((p) => [p!.id, p!]));
+    return (data ?? []).map((row: any) => ({
+      id: row.id,
+      postId: row.post_id,
+      authorId: row.author_id,
+      body: row.body,
+      createdAt: row.created_at,
+      author: byId.get(row.author_id) ?? null,
+    }));
+  },
+
+  async addPostComment(postId: string, body: string): Promise<PostComment> {
+    const cleaned = body.trim();
+    if (!cleaned) throw new Error('Comment cannot be empty');
+    if (!(await useLive()) || !isUuid(postId)) {
+      return demoChat.addPostComment(postId, cleaned);
+    }
+    const { data, error } = await supabase!.rpc('add_post_comment', {
+      p_post_id: postId,
+      p_body: cleaned,
+    });
+    if (error) throw error;
+    const me = await this.getMe();
+    notifyChatListeners();
+    return {
+      id: data.id ?? data?.id,
+      postId: data.post_id ?? postId,
+      authorId: data.author_id ?? me.id,
+      body: data.body ?? cleaned,
+      createdAt: data.created_at ?? new Date().toISOString(),
+      author: me,
+    };
+  },
+
+  async deletePostComment(commentId: string): Promise<void> {
+    if (!(await useLive()) || !isUuid(commentId)) {
+      await demoChat.deletePostComment(commentId);
+      return;
+    }
+    const { error } = await supabase!.rpc('delete_post_comment', {
+      p_comment_id: commentId,
+    });
+    if (error) throw error;
+    notifyChatListeners();
+  },
+
+  async setPostCommentsDisabled(
+    postId: string,
+    disabled: boolean,
+  ): Promise<void> {
+    if (!(await useLive()) || !isUuid(postId)) {
+      await demoChat.setPostCommentsDisabled(postId, disabled);
+      return;
+    }
+    const { error } = await supabase!.rpc('set_post_comments_disabled', {
+      p_post_id: postId,
+      p_disabled: disabled,
+    });
+    if (error) {
+      const { error: upErr } = await supabase!
+        .from('posts')
+        .update({ comments_disabled: disabled })
+        .eq('id', postId);
+      if (upErr) throw error;
+    }
+    notifyChatListeners();
   },
 
   async createPoll(question: string, options: string[]) {
@@ -2819,6 +3205,29 @@ export const chatRepo = {
       });
       if (error) throw error;
       liveOk = true;
+      // Keep explorer score accurate even if SQL lookups lag the client catalog.
+      try {
+        const me = await this.getMe();
+        const trips = await this.listExplorerTripsForUser(me.id);
+        const miles = Math.max(
+          0,
+          Math.round(
+            computeExplorerScoreMiles({
+              homeUniversity: me.homeUniversity,
+              studyAbroadProgram: me.studyAbroadProgram,
+              hostCity: me.hostCity,
+              hostCountry: me.hostCountry,
+              trips,
+            }),
+          ),
+        );
+        await supabase!
+          .from('profiles')
+          .update({ explorer_score_miles: miles })
+          .eq('id', me.id);
+      } catch {
+        // non-fatal
+      }
     }
     await demoChat.confirmTrip(tripId);
     if (liveOk) demoChat.notify();
@@ -3687,6 +4096,41 @@ function mapFeedPostRow(row: any): FeedPost {
     audienceCommunityIds: row.audience_community_ids ?? [],
     taggedTripId: row.tagged_trip_id ?? null,
     taggedUserIds: row.tagged_user_ids ?? [],
+    commentsDisabled: Boolean(row.comments_disabled),
+    commentCount: Number(row.comment_count ?? 0),
+    commentPreviewBody: row.comment_preview_body ?? null,
+    commentPreviewAuthor: row.comment_preview_author ?? null,
+  };
+}
+
+function mapPostCommentRow(row: any): PostComment {
+  const fullName =
+    (row.author_full_name as string)?.trim() ||
+    [row.author_first_name, row.author_last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim() ||
+    'Traveler';
+  const author: ChatProfile | null = row.author_id
+    ? {
+        id: row.author_id,
+        firstName: row.author_first_name ?? '',
+        lastName: row.author_last_name ?? '',
+        fullName,
+        avatar: row.author_avatar || defaultAvatarUrl(fullName),
+        homeUniversity: '',
+        studyAbroadProgram: '',
+        homeAccent: '#175864',
+        abroadAccent: '#E8A838',
+      }
+    : null;
+  return {
+    id: row.id,
+    postId: row.post_id,
+    authorId: row.author_id,
+    body: row.body,
+    createdAt: row.created_at,
+    author,
   };
 }
 
@@ -3720,12 +4164,13 @@ async function uploadAlbumPhoto(
   }
   const uri = String(localUri);
   if (uri.startsWith('http://') || uri.startsWith('https://')) return uri;
-  const optimized = await optimizeLocalImageForUpload(uri);
+  const optimized = await optimizeLocalImageForUpload(uri, { album: true });
   const ext = extensionForUpload(optimized.uri, optimized.jpeg);
   const contentType = contentTypeForUpload(optimized.uri, optimized.jpeg);
   const path = `${userId}/${Date.now()}-${index}.${ext}`;
   const res = await fetch(optimized.uri);
   const buf = await res.arrayBuffer();
+  // Release optimized temp reference ASAP (helps memory on large batches)
   const { error } = await supabase!.storage
     .from('album-photos')
     .upload(path, buf, { contentType, upsert: false });
@@ -3745,21 +4190,29 @@ async function uploadAlbumPhoto(
 }
 
 function mapProfile(row: any): ChatProfile {
-  const fullName = row.full_name ?? 'User';
+  const isOfficial =
+    row.id === 'fa989cf9-6770-48d3-a715-dd095c6dee38';
+  const firstName = isOfficial
+    ? 'Abroadster'
+    : row.first_name;
+  const lastName = isOfficial ? '' : row.last_name;
+  const fullName = isOfficial
+    ? 'Abroadster'
+    : row.full_name ?? 'User';
   return {
     id: row.id,
-    firstName: row.first_name,
-    lastName: row.last_name,
+    firstName,
+    lastName,
     fullName,
     avatar: row.avatar_url || defaultAvatarUrl(fullName),
-    homeUniversity: row.home_university,
-    studyAbroadProgram: row.study_abroad_program,
+    homeUniversity: isOfficial ? '' : row.home_university,
+    studyAbroadProgram: isOfficial ? '' : row.study_abroad_program,
     homeAccent: row.home_accent,
     abroadAccent: row.abroad_accent,
     bio: row.bio ?? null,
     semester: row.semester ?? null,
-    hostCity: row.host_city ?? null,
-    hostCountry: row.host_country ?? null,
+    hostCity: isOfficial ? null : row.host_city ?? null,
+    hostCountry: isOfficial ? null : row.host_country ?? null,
     hostLatitude:
       typeof row.host_latitude === 'number' ? row.host_latitude : null,
     hostLongitude:
@@ -3769,15 +4222,20 @@ function mapProfile(row: any): ChatProfile {
     liveLongitude:
       typeof row.live_longitude === 'number' ? row.live_longitude : null,
     liveLocationLabel: row.live_location_label ?? null,
-    citiesVisited:
-      typeof row.cities_visited === 'number' ? row.cities_visited : null,
+    citiesVisited: isOfficial
+      ? 197
+      : typeof row.cities_visited === 'number'
+        ? row.cities_visited
+        : null,
     countriesVisited:
       typeof row.countries_visited === 'number' ? row.countries_visited : null,
     explorerScoreMiles:
       typeof row.explorer_score_miles === 'number'
         ? row.explorer_score_miles
         : null,
-    isVerifiedStudent: Boolean(row.is_verified_student),
+    isVerifiedStudent: isOfficial
+      ? false
+      : Boolean(row.is_verified_student),
     studentEmail: row.student_email ?? null,
     phoneNumber: row.phone_number ?? null,
     dateOfBirth: row.date_of_birth ?? null,

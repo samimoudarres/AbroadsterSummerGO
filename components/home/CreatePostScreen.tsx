@@ -141,6 +141,9 @@ export function CreatePostScreen({
   const [audienceCommunityIds, setAudienceCommunityIds] = useState<string[]>(
     saved?.audienceCommunityIds ?? [],
   );
+  const [commentsDisabled, setCommentsDisabled] = useState(
+    saved?.commentsDisabled ?? false,
+  );
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -203,6 +206,7 @@ export function CreatePostScreen({
         setTaggedUserIds(post.taggedUserIds ?? []);
         setAudience(post.audience ?? 'all');
         setAudienceCommunityIds(post.audienceCommunityIds ?? []);
+        setCommentsDisabled(Boolean(post.commentsDisabled));
         const label = post.locationLabel || '';
         const [cityPart, ...rest] = label.split(',').map((s) => s.trim());
         setCityQuery(cityPart || label);
@@ -237,6 +241,7 @@ export function CreatePostScreen({
       audienceCommunityIds,
       taggedTripId,
       taggedUserIds,
+      commentsDisabled,
     });
   }, [
     isEditing,
@@ -252,6 +257,7 @@ export function CreatePostScreen({
     audienceCommunityIds,
     taggedTripId,
     taggedUserIds,
+    commentsDisabled,
   ]);
 
   useEffect(() => {
@@ -441,6 +447,7 @@ export function CreatePostScreen({
           audience === 'communities' ? audienceCommunityIds : [],
         taggedTripId,
         taggedUserIds,
+        commentsDisabled,
         photos: selectedPhotos.map((uri, i) => ({
           uri: uri as string,
           crop: crops[i] ?? DEFAULT_CROP,
@@ -1098,6 +1105,23 @@ export function CreatePostScreen({
           ) : null}
 
           <Pressable
+            style={styles.commentsToggle}
+            onPress={() => setCommentsDisabled((v) => !v)}
+          >
+            <Ionicons
+              name={commentsDisabled ? 'chatbubble-outline' : 'chatbubble'}
+              size={18}
+              color={colors.programBlue}
+            />
+            <Text style={styles.commentsToggleText}>
+              {commentsDisabled ? 'Comments are off' : 'Comments are on'}
+            </Text>
+            <Text style={styles.commentsToggleHint}>
+              {commentsDisabled ? 'Tap to allow' : 'Tap to turn off'}
+            </Text>
+          </Pressable>
+
+          <Pressable
             style={[styles.shareBtn, sharing && { opacity: 0.7 }]}
             onPress={onShare}
             disabled={sharing}
@@ -1747,6 +1771,28 @@ const styles = StyleSheet.create({
   audienceChipOn: { backgroundColor: colors.openJoin },
   audienceText: { fontFamily: fonts.bold, fontSize: 13, color: colors.black },
   audienceTextOn: { color: '#fff' },
+  commentsToggle: {
+    marginTop: 16,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(23,88,100,0.06)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  commentsToggleText: {
+    flex: 1,
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    color: colors.black,
+  },
+  commentsToggleHint: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
   shareBtn: {
     marginHorizontal: 16,
     marginTop: 24,

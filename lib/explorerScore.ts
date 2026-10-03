@@ -56,8 +56,9 @@ function tripPoint(t: ExplorerTripInput): LatLng | null {
 
 /**
  * Explorer Score (miles):
- * baseline = home university → abroad program
- * + unique locked-in (upcoming) trip destinations from host city
+ * baseline = home university → abroad program (straight line)
+ * + unique locked-in (upcoming) trip destinations from abroad program
+ *   (fallback: host city when program coords are missing)
  */
 export function computeExplorerScoreMiles(input: {
   homeUniversity: string | null | undefined;
@@ -76,12 +77,12 @@ export function computeExplorerScoreMiles(input: {
     );
   }
 
-  const host =
-    resolvePointForCity(input.hostCity, input.hostCountry) ||
+  const origin =
     abroad ||
+    resolvePointForCity(input.hostCity, input.hostCountry) ||
     resolvePointForSchool(input.studyAbroadProgram);
 
-  if (host) {
+  if (origin) {
     const seen = new Set<string>();
     for (const t of input.trips) {
       if (t.status !== 'upcoming') continue;
@@ -96,7 +97,7 @@ export function computeExplorerScoreMiles(input: {
       const dest = tripPoint(t);
       if (!dest) continue;
       total += Math.round(
-        distanceMiles(host.latitude, host.longitude, dest.latitude, dest.longitude),
+        distanceMiles(origin.latitude, origin.longitude, dest.latitude, dest.longitude),
       );
     }
   }

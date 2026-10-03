@@ -16,6 +16,7 @@ import type {
   PassportCityRank,
   PassportData,
   PollData,
+  PostComment,
   TripAlbum,
   AlbumPhoto,
   TripChannel,
@@ -242,6 +243,8 @@ type DemoState = {
   posts: FeedPost[];
   /** postId -> userIds who stamped */
   postStamps: Record<string, string[]>;
+  /** postId -> comments */
+  postComments: Record<string, PostComment[]>;
   passportUnlocks: StoredUnlock[];
   passportCities: StoredCity[];
   /** Persisted notification + onboarding prefs (demo / hybrid mirror) */
@@ -1025,6 +1028,7 @@ function buildSeed(): DemoState {
     polls: [],
     posts,
     postStamps,
+    postComments: {},
     passportUnlocks,
     passportCities,
     userSettings: {
@@ -1107,6 +1111,7 @@ async function persist() {
           photoUrls: (p.photoUrls ?? []).filter((u) => typeof u === 'string'),
         })),
         postStamps: memory.postStamps,
+        postComments: memory.postComments ?? {},
         memberIdsByCommunity: memory.memberIdsByCommunity,
         passportUnlocks: memory.passportUnlocks,
         passportCities: memory.passportCities,
@@ -1228,6 +1233,11 @@ export async function loadDemoState(): Promise<DemoState> {
       }
       if (saved.postStamps && typeof saved.postStamps === 'object') {
         seed.postStamps = saved.postStamps;
+      }
+      if (saved.postComments && typeof saved.postComments === 'object') {
+        seed.postComments = saved.postComments;
+      } else {
+        seed.postComments = seed.postComments ?? {};
       }
       seed.memberIdsByCommunity =
         saved.memberIdsByCommunity ?? seed.memberIdsByCommunity;
@@ -1464,6 +1474,7 @@ export async function loadDemoState(): Promise<DemoState> {
           photoUrls: (p.photoUrls ?? []).filter((u) => typeof u === 'string'),
         })),
         postStamps: memory.postStamps,
+        postComments: memory.postComments ?? {},
         memberIdsByCommunity: memory.memberIdsByCommunity,
         passportUnlocks: memory.passportUnlocks,
         passportCities: memory.passportCities,
@@ -2002,8 +2013,32 @@ export const demoChat = {
     emit();
   },
 
+  async ensureInviteFriendsNotification(): Promise<void> {
+    await loadDemoState();
+    const exists = state().notifications.some(
+      (n) => n.userId === DEMO_ME_ID && n.kind === 'invite_friends',
+    );
+    if (exists) return;
+    state().notifications.unshift({
+      id: id('notif-invite-friends'),
+      userId: DEMO_ME_ID,
+      kind: 'invite_friends',
+      title: 'Invite your friends',
+      body: 'Create your first trip and bring your people onto Abroadster.',
+      data: {
+        action: 'invite_friends',
+        appStoreUrl: 'https://apps.apple.com/app/id6800081262',
+      },
+      createdAt: new Date().toISOString(),
+      readAt: null,
+    });
+    await persist();
+    emit();
+  },
+
   async getNotifications(): Promise<ChatNotification[]> {
     await loadDemoState();
+    await this.ensureInviteFriendsNotification();
     return state()
       .notifications.filter((n) => n.userId === DEMO_ME_ID)
       .sort(
@@ -2054,6 +2089,8 @@ export const demoChat = {
 
       const author = state().profiles.find((x) => x.id === p.authorId);
       const stamps = state().postStamps[p.id] ?? [];
+      const comments = state().postComments?.[p.id] ?? [];
+      const lastComment = comments[comments.length - 1];
       const post: FeedPost = {
         ...p,
         stampCount: stamps.length,
@@ -2061,6 +2098,13 @@ export const demoChat = {
         stamperPreviewIds: stamps.slice(0, 3),
         photoUrls: usablePostPhotos(p.id, p.photoUrls),
         displayMode: p.displayMode ?? 'carousel',
+        commentCount: comments.length,
+        commentPreviewBody: lastComment?.body ?? p.commentPreviewBody ?? null,
+        commentPreviewAuthor:
+          state().profiles.find((x) => x.id === lastComment?.authorId)
+            ?.fullName ??
+          p.commentPreviewAuthor ??
+          null,
       };
       const score = scoreHomeFeedPost(post, author, {
         meId: DEMO_ME_ID,
@@ -2118,9 +2162,12 @@ export const demoChat = {
       taggedUserIds: (input.taggedUserIds ?? []).filter(
         (uid) => uid && uid !== DEMO_ME_ID,
       ),
+      commentsDisabled: Boolean(input.commentsDisabled),
+      commentCount: 0,
     };
     state().posts.unshift(post);
     state().postStamps[postId] = [];
+    state().postComments[postId] = [];
 
     const tagged = post.taggedUserIds ?? [];
     for (const uid of tagged) {
@@ -2151,6 +2198,7 @@ export const demoChat = {
     }
     state().posts.splice(idx, 1);
     delete state().postStamps[postId];
+    delete state().postComments[postId];
     await persist();
     emit();
   },
@@ -2184,6 +2232,9 @@ export const demoChat = {
     post.taggedUserIds = (input.taggedUserIds ?? []).filter(
       (uid) => uid && uid !== DEMO_ME_ID,
     );
+    if (typeof input.commentsDisabled === 'boolean') {
+      post.commentsDisabled = input.commentsDisabled;
+    }
     await persist();
     emit();
     return {
@@ -2191,7 +2242,93 @@ export const demoChat = {
       stampCount: (state().postStamps[postId] ?? []).length,
       iStamped: (state().postStamps[postId] ?? []).includes(DEMO_ME_ID),
       stamperPreviewIds: (state().postStamps[postId] ?? []).slice(0, 3),
+      commentCount: (state().postComments[postId] ?? []).length,
     };
+  },
+
+  async listPostComments(postId: string): Promise<PostComment[]> {
+    await loadDemoState();
+    const rows = state().postComments[postId] ?? [];
+    return rows.map((c) => ({
+      ...c,
+      author: state().profiles.find((p) => p.id === c.authorId) ?? null,
+    }));
+  },
+
+  async addPostComment(postId: string, body: string): Promise<PostComment> {
+    await loadDemoState();
+    const post = state().posts.find((p) => p.id === postId);
+    if (!post) throw new Error('Post not found');
+    if (post.commentsDisabled) throw new Error('Comments are turned off for this post');
+    const me = state().profiles.find((p) => p.id === DEMO_ME_ID)!;
+    const comment: PostComment = {
+      id: id('cmt'),
+      postId,
+      authorId: DEMO_ME_ID,
+      body: body.trim(),
+      createdAt: new Date().toISOString(),
+      author: me,
+    };
+    const list = state().postComments[postId] ?? [];
+    list.push(comment);
+    state().postComments[postId] = list;
+    post.commentCount = list.length;
+    post.commentPreviewBody = comment.body;
+    post.commentPreviewAuthor = me.fullName;
+    if (post.authorId !== DEMO_ME_ID) {
+      state().notifications.unshift({
+        id: id('notif'),
+        userId: post.authorId,
+        kind: 'post_commented',
+        title: 'New comment',
+        body: `${me.fullName}: ${comment.body}`.slice(0, 120),
+        data: { post_id: postId, comment_id: comment.id, actor_id: DEMO_ME_ID },
+        createdAt: new Date().toISOString(),
+        readAt: null,
+      });
+    }
+    await persist();
+    emit();
+    return comment;
+  },
+
+  async deletePostComment(commentId: string): Promise<void> {
+    await loadDemoState();
+    for (const [postId, list] of Object.entries(state().postComments)) {
+      const idx = list.findIndex((c) => c.id === commentId);
+      if (idx < 0) continue;
+      const post = state().posts.find((p) => p.id === postId);
+      const row = list[idx];
+      if (
+        row.authorId !== DEMO_ME_ID &&
+        post?.authorId !== DEMO_ME_ID
+      ) {
+        throw new Error('Not allowed');
+      }
+      list.splice(idx, 1);
+      if (post) {
+        post.commentCount = list.length;
+        const last = list[list.length - 1];
+        post.commentPreviewBody = last?.body ?? null;
+        post.commentPreviewAuthor =
+          state().profiles.find((p) => p.id === last?.authorId)?.fullName ?? null;
+      }
+      await persist();
+      emit();
+      return;
+    }
+  },
+
+  async setPostCommentsDisabled(
+    postId: string,
+    disabled: boolean,
+  ): Promise<void> {
+    await loadDemoState();
+    const post = state().posts.find((p) => p.id === postId);
+    if (!post || post.authorId !== DEMO_ME_ID) return;
+    post.commentsDisabled = disabled;
+    await persist();
+    emit();
   },
 
   async listAuthorPosts(authorId: string): Promise<FeedPost[]> {
@@ -2309,14 +2446,20 @@ export const demoChat = {
     return scored.slice(0, limit).map((s) => s.card);
   },
 
-  /** Albums for trips this user is (or was) on — profile horizontal rail. */
+  /** Albums for trips this user finished (or that already have photos). */
   async listAuthorAlbums(userId: string, limit = 40): Promise<FeedAlbumCard[]> {
     await loadDemoState();
+    const today = new Date().toISOString().slice(0, 10);
     const cards: FeedAlbumCard[] = [];
     for (const al of state().albums) {
       const trip = state().trips.find((t) => t.id === al.tripId);
       if (!trip) continue;
       if (!trip.memberIds.includes(userId) && trip.ownerId !== userId) continue;
+      const end = (trip.dateEnd || trip.dateStart || '').slice(0, 10);
+      const hasPhotos =
+        (al.photoUrls?.length ?? 0) > 0 || (al.photos?.length ?? 0) > 0;
+      // Hide future trip boards that have no memories yet
+      if (end && end > today && !hasPhotos) continue;
       cards.push({
         albumId: al.id,
         tripId: trip.id,
@@ -2616,9 +2759,13 @@ export const demoChat = {
 
   async syncPassportTripCities(): Promise<number> {
     await loadDemoState();
+    const today = new Date().toISOString().slice(0, 10);
     let count = 0;
     for (const trip of state().trips) {
       if (!trip.memberIds.includes(DEMO_ME_ID)) continue;
+      const end = (trip.dateEnd || trip.dateStart || '').slice(0, 10);
+      // Only unlock stamps for trips that have already happened
+      if (end && end > today) continue;
       applyTripPassportUnlock({
         unlocks: state().passportUnlocks,
         cities: state().passportCities,
@@ -3391,10 +3538,37 @@ export const demoChat = {
         t.lastPreview = last.body ?? last.kind;
         t.updatedAt = last.createdAt;
       }
+      const lastRead = t.lastReadAt ?? '1970-01-01';
+      t.unreadCount = msgs.filter(
+        (m) =>
+          m.senderId &&
+          m.senderId !== DEMO_ME_ID &&
+          new Date(m.createdAt).getTime() > new Date(lastRead).getTime(),
+      ).length;
     }
     return [...state().dmThreads].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
+  },
+
+  async markDmThreadRead(threadId: string): Promise<void> {
+    await loadDemoState();
+    const t = state().dmThreads.find((x) => x.id === threadId);
+    if (t) {
+      t.lastReadAt = new Date().toISOString();
+      t.unreadCount = 0;
+    }
+    for (const n of state().notifications) {
+      if (
+        n.kind === 'dm_message' &&
+        !n.readAt &&
+        String(n.data?.thread_id ?? n.data?.threadId ?? '') === threadId
+      ) {
+        n.readAt = new Date().toISOString();
+      }
+    }
+    await persist();
+    emit();
   },
 
   async openDm(otherUserId: string): Promise<DmThread> {

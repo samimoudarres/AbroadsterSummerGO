@@ -238,21 +238,49 @@ async function upsertLiveProfile(
     );
   }
 
-  const clientMiles = explorerMilesForDraft(draft);
   // Enrichment only — never fail account creation if optional RPCs/tables lag.
   const { error: scoreErr } = await supabase.rpc('recompute_explorer_score', {
     p_user_id: userId,
   });
   if (scoreErr) {
     console.warn('recompute_explorer_score', scoreErr.message);
+    // Fallback when RPC unavailable: baseline home → abroad only.
+    const clientMiles = explorerMilesForDraft(draft);
+    if (clientMiles > 0) {
+      const { error: milesErr } = await supabase
+        .from('profiles')
+        .update({ explorer_score_miles: clientMiles })
+        .eq('id', userId);
+      if (milesErr) {
+        console.warn('explorer_score_miles update', milesErr.message);
+      }
+    }
   }
-  if (clientMiles > 0) {
-    const { error: milesErr } = await supabase
-      .from('profiles')
-      .update({ explorer_score_miles: clientMiles })
-      .eq('id', userId);
-    if (milesErr) {
-      console.warn('explorer_score_miles update', milesErr.message);
+  // Auto-friend official Abroadster (new accounts only; silent when RPC exists).
+  try {
+    const { error: friendErr } = await supabase.rpc('ensure_abroadster_friend', {
+      p_user_id: userId,
+    });
+    if (friendErr) {
+      // Fallback until migration 058 is applied: directed friend (notifies Abroadster only).
+      const { ABROADSTER_OFFICIAL_ID } = await import(
+        '../social/abroadsterOfficial'
+      );
+      const { error: addErr } = await supabase.rpc('add_friend', {
+        p_friend_id: ABROADSTER_OFFICIAL_ID,
+      });
+      if (addErr) console.warn('add_friend Abroadster', addErr.message);
+    }
+  } catch (e: any) {
+    try {
+      const { ABROADSTER_OFFICIAL_ID } = await import(
+        '../social/abroadsterOfficial'
+      );
+      await supabase.rpc('add_friend', {
+        p_friend_id: ABROADSTER_OFFICIAL_ID,
+      });
+    } catch (e2: any) {
+      console.warn('ensure_abroadster_friend', e2?.message || e?.message);
     }
   }
   const { error: passportErr } = await supabase.rpc('passport_ensure_host_city', {

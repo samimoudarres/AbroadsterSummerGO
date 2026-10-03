@@ -27,6 +27,10 @@ import { CreatePostScreen } from '../home/CreatePostScreen';
 import { BottomNav } from '../navigation/BottomNav';
 import { ProfileModal } from '../profile/ProfileModal';
 import { SuggestedAccountsOverlay } from '../profile/SuggestedAccountsOverlay';
+import {
+  OnboardingTourOverlay,
+  ONBOARDING_TOUR_STEPS,
+} from '../onboarding/OnboardingTourOverlay';
 import { getUserById } from '../../data/mockMapData';
 import {
   allowDemoSeedMerge,
@@ -135,6 +139,13 @@ export function AppShell() {
   const [feedNonce, setFeedNonce] = useState(0);
   const [firstMapOnboarding, setFirstMapOnboarding] = useState(false);
   const [showSuggestedOverlay, setShowSuggestedOverlay] = useState(false);
+  const [mapIntroNonce, setMapIntroNonce] = useState(0);
+  const [pendingMapIntro, setPendingMapIntro] = useState(false);
+  const [tourVisible, setTourVisible] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+  const [forceChatSidebar, setForceChatSidebar] = useState(false);
+  const [forcePassportTab, setForcePassportTab] = useState(false);
+  const [pendingProductTour, setPendingProductTour] = useState(false);
 
   const createX = useSharedValue(0);
   const createPostOpen = showCreatePost || Boolean(editPostId);
@@ -358,7 +369,7 @@ export function AppShell() {
     };
   }, []);
 
-  /** After signup: map + Europe/home filter + suggested overlay (not own profile). */
+  /** After signup: map + suggested overlay (not own profile). */
   useEffect(() => {
     if (!openMapOnboardingAfterAuth) return;
     let cancelled = false;
@@ -370,10 +381,19 @@ export function AppShell() {
         if (cancelled) return;
         if (!settings.onboarding.first_map_done) {
           setFirstMapOnboarding(true);
+          setPendingMapIntro(true);
         }
         if (!settings.onboarding.suggested_overlay_done) {
           setShowSuggestedOverlay(true);
+        } else if (!settings.onboarding.first_map_done) {
+          // Suggested already done earlier — run map intro now
+          setMapIntroNonce((n) => n + 1);
         }
+        if (!settings.onboarding.product_tour_done) {
+          setPendingProductTour(true);
+        }
+        // Seed welcome invite so the bell shows a red dot for new accounts
+        void chatRepo.ensureInviteFriendsNotification().catch(() => {});
       } finally {
         if (!cancelled) clearOpenMapOnboardingAfterAuth();
       }
@@ -382,6 +402,61 @@ export function AppShell() {
       cancelled = true;
     };
   }, [openMapOnboardingAfterAuth, clearOpenMapOnboardingAfterAuth]);
+
+  const finishProductTour = useCallback(async () => {
+    setTourVisible(false);
+    setTourStep(0);
+    setForceChatSidebar(false);
+    setForcePassportTab(false);
+    setPendingProductTour(false);
+    try {
+      await chatRepo.updateMySettings({
+        onboarding: { product_tour_done: true },
+      });
+    } catch {
+      // local dismiss still stands
+    }
+  }, []);
+
+  const advanceProductTour = useCallback(() => {
+    const next = tourStep + 1;
+    if (next >= ONBOARDING_TOUR_STEPS.length) {
+      void finishProductTour();
+      return;
+    }
+    const step = ONBOARDING_TOUR_STEPS[next];
+    setTourStep(next);
+    setForceChatSidebar(false);
+    setForcePassportTab(false);
+    if (step.id === 'welcome') {
+      setActiveTab('map');
+      setShowProfile(false);
+    } else if (step.id === 'home') {
+      setShowProfile(false);
+      setActiveTab('home');
+    } else if (step.id === 'chat') {
+      setShowProfile(false);
+      setActiveTab('messages');
+      setForceChatSidebar(true);
+    } else if (step.id === 'trips') {
+      setShowProfile(false);
+      setActiveTab('trips');
+    } else if (step.id === 'map') {
+      setShowProfile(false);
+      setActiveTab('map');
+      setMapFocus({ latitude: 48.2, longitude: 10.5, zoom: 3.5 });
+    } else if (step.id === 'profile') {
+      setForcePassportTab(true);
+      openOwnProfileInstant();
+    }
+  }, [tourStep, finishProductTour]);
+
+  const startProductTour = useCallback(() => {
+    setTourStep(0);
+    setTourVisible(true);
+    setActiveTab('map');
+    setShowProfile(false);
+  }, []);
 
   const openPostLocation = (post: FeedPost) => {
     const fromPost =
@@ -424,6 +499,15 @@ export function AppShell() {
               onConsumedSchoolNav={() => setMapSchoolNav(null)}
               firstMapOnboarding={firstMapOnboarding}
               onConsumedFirstMapOnboarding={() => setFirstMapOnboarding(false)}
+              mapIntroNonce={mapIntroNonce}
+              holdWideCamera={showSuggestedOverlay || pendingMapIntro}
+              onMapIntroComplete={() => {
+                setPendingMapIntro(false);
+                if (pendingProductTour) {
+                  // Beat after zoom settles
+                  setTimeout(() => startProductTour(), 500);
+                }
+              }}
               onMessageUser={(userId) => {
                 setDmUserId(userId);
                 setActiveTab('messages');
@@ -472,6 +556,8 @@ export function AppShell() {
             onConsumedTripChannel={() => setFocusTripChannelId(null)}
             initialSchoolChannel={focusSchoolChannel}
             onConsumedSchoolChannel={() => setFocusSchoolChannel(null)}
+            forceSidebarOpen={forceChatSidebar}
+            onConsumedForceSidebar={() => setForceChatSidebar(false)}
             onViewSharedPost={(postId) => {
               setFocusPostId(postId);
               setActiveTab('home');
@@ -503,9 +589,11 @@ export function AppShell() {
       <ProfileModal
         visible={showProfile}
         user={profileUser}
+        forcePassportTab={forcePassportTab}
         overlayBottom={albumTripId ? 0 : navClearance}
         onClose={() => {
           setShowProfile(false);
+          setForcePassportTab(false);
           if (activeTab === 'profile') setActiveTab('map');
         }}
         onOpenAlbum={(tripId) => {
@@ -552,10 +640,28 @@ export function AppShell() {
 
       <SuggestedAccountsOverlay
         visible={showSuggestedOverlay}
-        onDismissed={() => setShowSuggestedOverlay(false)}
+        onDismissed={() => {
+          setShowSuggestedOverlay(false);
+          if (pendingMapIntro) {
+            setMapIntroNonce((n) => n + 1);
+          } else if (pendingProductTour) {
+            setTimeout(() => startProductTour(), 400);
+          }
+        }}
         onOpenProfile={(u) => {
           setShowSuggestedOverlay(false);
           void openProfileFromChat(u);
+        }}
+      />
+
+      <OnboardingTourOverlay
+        visible={tourVisible}
+        stepIndex={tourStep}
+        onSkip={() => {
+          void finishProductTour();
+        }}
+        onPrimary={() => {
+          advanceProductTour();
         }}
       />
 

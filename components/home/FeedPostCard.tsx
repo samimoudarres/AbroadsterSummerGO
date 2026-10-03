@@ -26,6 +26,7 @@ import {
   LocationPinIcon,
   ShareIcon,
   StampIcon,
+  CommentIcon,
 } from './HomeIcons';
 import { StampBurst } from './StampBurst';
 import { CollageCanvas } from './create/CollageCanvas';
@@ -46,6 +47,7 @@ interface FeedPostCardProps {
   onOpenStampers?: (post: FeedPost) => void;
   onToggleStamp: (post: FeedPost) => void;
   onShare: (post: FeedPost) => void;
+  onOpenComments?: (post: FeedPost) => void;
   onOpenLocation?: (post: FeedPost) => void;
   /** Open the trip tagged on this post (plane icon). */
   onOpenTaggedTrip?: (tripId: string) => void;
@@ -53,6 +55,10 @@ interface FeedPostCardProps {
   isOwnPost?: boolean;
   onEditPost?: (post: FeedPost) => void;
   onDeletePost?: (post: FeedPost) => void;
+  onToggleCommentsDisabled?: (post: FeedPost, disabled: boolean) => void;
+  /** Show Instagram-style Add friend next to the timestamp. */
+  showAddFriend?: boolean;
+  onAddFriend?: (userId: string) => void;
 }
 
 export function FeedPostCard({
@@ -63,11 +69,15 @@ export function FeedPostCard({
   onOpenStampers,
   onToggleStamp,
   onShare,
+  onOpenComments,
   onOpenLocation,
   onOpenTaggedTrip,
   isOwnPost = false,
   onEditPost,
   onDeletePost,
+  onToggleCommentsDisabled,
+  showAddFriend = false,
+  onAddFriend,
 }: FeedPostCardProps) {
   const photos = post.photoUrls?.length ? post.photoUrls : [];
   const [index, setIndex] = useState(0);
@@ -251,18 +261,31 @@ export function FeedPostCard({
       }}
     >
       <View style={styles.top}>
-        <Pressable
-          style={styles.topLeft}
-          onPress={() => author && onOpenProfile?.(author)}
-        >
-          <Avatar source={author?.avatar} size={32} />
+        <View style={styles.topLeft}>
+          <Pressable onPress={() => author && onOpenProfile?.(author)} hitSlop={4}>
+            <Avatar source={author?.avatar} size={32} />
+          </Pressable>
           <View style={styles.topText}>
-            <Text style={styles.name} numberOfLines={1}>
-              {author?.fullName ?? 'Traveler'}
-            </Text>
-            <Text style={styles.ago}>{timeAgo(post.createdAt)}</Text>
+            <Pressable onPress={() => author && onOpenProfile?.(author)}>
+              <Text style={styles.name} numberOfLines={1}>
+                {author?.fullName ?? 'Traveler'}
+              </Text>
+            </Pressable>
+            <View style={styles.agoRow}>
+              <Text style={styles.ago}>{timeAgo(post.createdAt)}</Text>
+              {showAddFriend ? (
+                <Pressable
+                  style={styles.addFriendBtn}
+                  onPress={() => onAddFriend?.(post.authorId)}
+                  hitSlop={6}
+                  accessibilityLabel={`Add ${author?.firstName ?? 'friend'}`}
+                >
+                  <Text style={styles.addFriendText}>Add friend</Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
-        </Pressable>
+        </View>
         <View style={styles.topRight}>
           <Pressable
             style={styles.loc}
@@ -311,6 +334,31 @@ export function FeedPostCard({
                 >
                   <Ionicons name="create-outline" size={20} color={colors.black} />
                   <Text style={styles.menuText}>Edit post</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.menuRow}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    onToggleCommentsDisabled?.(
+                      post,
+                      !Boolean(post.commentsDisabled),
+                    );
+                  }}
+                >
+                  <Ionicons
+                    name={
+                      post.commentsDisabled
+                        ? 'chatbubble'
+                        : 'chatbubble-outline'
+                    }
+                    size={20}
+                    color={colors.black}
+                  />
+                  <Text style={styles.menuText}>
+                    {post.commentsDisabled
+                      ? 'Turn comments on'
+                      : 'Turn comments off'}
+                  </Text>
                 </Pressable>
                 <Pressable
                   style={styles.menuRow}
@@ -497,6 +545,19 @@ export function FeedPostCard({
             <Text style={styles.stampCount}>{post.stampCount}</Text>
           </Pressable>
           <Pressable
+            onPress={() => onOpenComments?.(post)}
+            hitSlop={8}
+            style={styles.commentBtn}
+            accessibilityLabel="Comments"
+          >
+            <View style={styles.actionIcon}>
+              <CommentIcon size={23} color="#262626" />
+            </View>
+            {(post.commentCount ?? 0) > 0 ? (
+              <Text style={styles.stampCount}>{post.commentCount}</Text>
+            ) : null}
+          </Pressable>
+          <Pressable
             onPress={() => onShare(post)}
             hitSlop={8}
             style={styles.shareBtn}
@@ -547,6 +608,27 @@ export function FeedPostCard({
             {post.caption}
           </Text>
         ) : null}
+
+        {!post.commentsDisabled && (post.commentCount ?? 0) > 0 ? (
+          <Pressable onPress={() => onOpenComments?.(post)} hitSlop={4}>
+            <Text style={styles.viewComments}>
+              View all {post.commentCount} comment
+              {(post.commentCount ?? 0) === 1 ? '' : 's'}
+            </Text>
+            {post.commentPreviewBody ? (
+              <Text style={styles.commentPreview} numberOfLines={2}>
+                <Text style={styles.captionName}>
+                  {(post.commentPreviewAuthor ?? 'Traveler').split(' ')[0]}{' '}
+                </Text>
+                {post.commentPreviewBody}
+              </Text>
+            ) : null}
+          </Pressable>
+        ) : !post.commentsDisabled ? (
+          <Pressable onPress={() => onOpenComments?.(post)} hitSlop={4}>
+            <Text style={styles.viewComments}>Add a comment…</Text>
+          </Pressable>
+        ) : null}
         <Text style={styles.date}>{formatPostDate(post.createdAt)}</Text>
       </View>
     </View>
@@ -564,6 +646,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(60,60,67,0.29)',
   },
   topLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 },
+  authorHit: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8, minWidth: 0 },
   topText: { flex: 1, minWidth: 0 },
   name: {
     fontFamily: fonts.extraBold,
@@ -575,6 +658,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(4,0,0,0.5)',
     marginTop: -1,
+  },
+  agoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  addFriendBtn: {
+    backgroundColor: colors.brandTeal,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    flexShrink: 0,
+  },
+  addFriendText: {
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    color: colors.white,
   },
   topRight: {
     flexDirection: 'row',
@@ -661,6 +762,7 @@ const styles = StyleSheet.create({
     minHeight: 34,
   },
   stampBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  commentBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   actionIcon: {
     width: 28,
     height: 28,
@@ -720,6 +822,19 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   captionName: { fontFamily: fonts.bold },
+  viewComments: {
+    marginTop: 6,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  commentPreview: {
+    marginTop: 4,
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: '#262626',
+    lineHeight: 18,
+  },
   date: {
     marginTop: 6,
     fontFamily: fonts.regular,

@@ -35,6 +35,10 @@ import {
 } from '../../lib/profile/profileCache';
 import { feedImageSource } from '../../lib/feed/feedPhotos';
 import { formatExplorerScore, computeExplorerScoreMiles } from '../../lib/explorerScore';
+import {
+  ABROADSTER_OFFICIAL_CITIES,
+  isAbroadsterOfficial,
+} from '../../lib/social/abroadsterOfficial';
 import { presentLocalNotification } from '../../lib/trips/push';
 import { useEdgeSwipeBack } from '../../lib/gestures/useEdgeSwipeBack';
 import { PHONE_WIDTH } from '../layout/PhoneShell';
@@ -74,6 +78,8 @@ interface ProfileModalProps {
   onEditPost?: (postId: string) => void;
   /** Override bottom inset (0 = full-bleed over hidden nav / album). */
   overlayBottom?: number;
+  /** Product tour: switch to stamps / passport tab. */
+  forcePassportTab?: boolean;
 }
 
 function schoolAccent(label: string, fallback: string): string {
@@ -127,6 +133,7 @@ export function ProfileModal({
   onAirMail,
   onEditPost,
   overlayBottom,
+  forcePassportTab = false,
 }: ProfileModalProps) {
   const [tab, setTab] = useState<'posts' | 'passport'>('posts');
   const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -149,6 +156,15 @@ export function ProfileModal({
   const [legalDoc, setLegalDoc] = useState<'terms' | 'privacy' | null>(null);
   const [gridWidth, setGridWidth] = useState(PHONE_WIDTH);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [explorerTrips, setExplorerTrips] = useState<
+    {
+      status: 'upcoming' | 'planning';
+      destinationCity: string;
+      destinationCountry: string;
+      latitude?: number | null;
+      longitude?: number | null;
+    }[]
+  >([]);
   const loadedUserIdRef = useRef<string | null>(null);
   const loadGenRef = useRef(0);
   const navClearance = useBottomNavClearance();
@@ -159,6 +175,10 @@ export function ProfileModal({
   );
 
   const goTab = (next: 'posts' | 'passport') => {
+    if (isAbroadsterOfficial(user?.id) && next === 'passport') {
+      setTab('posts');
+      return;
+    }
     setTab(next);
   };
 
@@ -251,10 +271,27 @@ export function ProfileModal({
     }
 
     void load(user.id, { silent: sameUser || fromCache });
+    void chatRepo
+      .listExplorerTripsForUser(user.id)
+      .then((trips) => {
+        if (loadedUserIdRef.current === user.id || !loadedUserIdRef.current) {
+          setExplorerTrips(trips);
+        }
+      })
+      .catch(() => setExplorerTrips([]));
     return subscribeChat(() => {
       void load(user.id, { silent: true });
     });
   }, [visible, user?.id, load, hydrateFromCache]);
+
+  useEffect(() => {
+    if (!visible || !forcePassportTab) return;
+    if (isAbroadsterOfficial(user?.id)) {
+      setTab('posts');
+      return;
+    }
+    setTab('passport');
+  }, [visible, forcePassportTab, user?.id]);
 
   const isSelf = Boolean(user && isOwnSender(user.id, meId));
 
@@ -397,7 +434,10 @@ export function ProfileModal({
     onToggleFriend,
   ]);
 
+  const isOfficial = isAbroadsterOfficial(user?.id);
+
   const citiesVisited = useMemo(() => {
+    if (isOfficial) return ABROADSTER_OFFICIAL_CITIES;
     if (
       typeof chatProfile?.citiesVisited === 'number' &&
       chatProfile.citiesVisited > 0
@@ -418,17 +458,19 @@ export function ProfileModal({
     }
     if (cities.size > 0) return cities.size;
     return user?.countriesVisited ?? chatProfile?.countriesVisited ?? 0;
-  }, [albums, chatProfile, posts, user]);
+  }, [albums, chatProfile, isOfficial, posts, user]);
 
   const bio =
     chatProfile?.bio ||
     user?.bio ||
     '';
 
-  const homeSchool =
-    chatProfile?.homeUniversity || user?.homeUniversity || '';
-  const abroadSchool =
-    chatProfile?.studyAbroadProgram || user?.studyAbroadProgram || '';
+  const homeSchool = isOfficial
+    ? ''
+    : chatProfile?.homeUniversity || user?.homeUniversity || '';
+  const abroadSchool = isOfficial
+    ? ''
+    : chatProfile?.studyAbroadProgram || user?.studyAbroadProgram || '';
   const homeAccent = schoolAccent(
     homeSchool,
     chatProfile?.homeAccent || '#9D9D9D',
@@ -439,20 +481,26 @@ export function ProfileModal({
   );
   const homeVisual = resolveSchoolVisual({ name: homeSchool });
   const abroadVisual = resolveSchoolVisual({ name: abroadSchool });
+  const clientExplorerScore = computeExplorerScoreMiles({
+    homeUniversity: homeSchool,
+    studyAbroadProgram: abroadSchool,
+    hostCity: chatProfile?.hostCity || user?.hostCity,
+    hostCountry: chatProfile?.hostCountry || user?.hostCountry,
+    trips: explorerTrips,
+  });
   const explorerScore = Math.max(
     0,
     Math.round(
-      chatProfile?.explorerScoreMiles && chatProfile.explorerScoreMiles > 0
-        ? chatProfile.explorerScoreMiles
-        : computeExplorerScoreMiles({
-            homeUniversity: homeSchool,
-            studyAbroadProgram: abroadSchool,
-            hostCity: chatProfile?.hostCity || user?.hostCity,
-            hostCountry: chatProfile?.hostCountry || user?.hostCountry,
-            trips: [],
-          }),
+      Math.max(
+        chatProfile?.explorerScoreMiles ?? 0,
+        clientExplorerScore,
+      ),
     ),
   );
+
+  const displayName = isOfficial
+    ? 'Abroadster'
+    : user?.fullName || chatProfile?.fullName || 'User';
 
   if (!visible || !user) return null;
 
@@ -474,7 +522,7 @@ export function ProfileModal({
               <Stat
                 value={String(citiesVisited)}
                 label="cities"
-                onPress={() => goTab('passport')}
+                onPress={isOfficial ? undefined : () => goTab('passport')}
               />
             </View>
           </View>
@@ -482,9 +530,9 @@ export function ProfileModal({
           <View style={styles.bioBlock}>
             <View style={styles.nameRow}>
               <Text style={styles.fullName} numberOfLines={1}>
-                {user.fullName}
+                {displayName}
               </Text>
-              {user.isVerifiedStudent ? (
+              {user.isVerifiedStudent && !isOfficial ? (
                 <View
                   style={styles.verifiedPill}
                   accessibilityLabel="Verified student"
@@ -493,6 +541,7 @@ export function ProfileModal({
                   <Text style={styles.verifiedText}>Student</Text>
                 </View>
               ) : null}
+              {!isOfficial ? (
               <Pressable
                 onPress={() => setScoreInfoOpen((v) => !v)}
                 style={[
@@ -506,7 +555,8 @@ export function ProfileModal({
                   {formatExplorerScore(explorerScore)}
                 </Text>
               </Pressable>
-              {isSelf ? (
+              ) : null}
+              {isSelf && !isOfficial ? (
                 <Pressable
                   onPress={() => {
                     setEditPanel('profile');
@@ -603,7 +653,7 @@ export function ProfileModal({
             ) : null}
           </View>
 
-          {albums.length > 0 ? (
+          {albums.length > 0 && !isOfficial ? (
             <View style={styles.albumsSection}>
               <Text style={styles.albumsTitle}>Albums</Text>
               <ScrollView
@@ -625,6 +675,18 @@ export function ProfileModal({
             </View>
           ) : null}
 
+          {isOfficial ? (
+            <View style={styles.tabs}>
+              <Pressable style={styles.tab} onPress={() => goTab('posts')}>
+                <Ionicons
+                  name="grid-outline"
+                  size={24}
+                  color={colors.black}
+                />
+                <View style={styles.tabUnderline} />
+              </Pressable>
+            </View>
+          ) : (
           <View style={styles.tabs}>
             <Pressable style={styles.tab} onPress={() => goTab('posts')}>
               <Ionicons
@@ -643,6 +705,7 @@ export function ProfileModal({
               {tab === 'passport' && <View style={styles.tabUnderline} />}
             </Pressable>
           </View>
+          )}
     </>
   );
 

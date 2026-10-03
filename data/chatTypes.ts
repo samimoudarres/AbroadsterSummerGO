@@ -216,6 +216,19 @@ export interface FeedPost {
     offsetX: number;
     offsetY: number;
   } | null>;
+  commentsDisabled?: boolean;
+  commentCount?: number;
+  commentPreviewBody?: string | null;
+  commentPreviewAuthor?: string | null;
+}
+
+export interface PostComment {
+  id: string;
+  postId: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+  author?: ChatProfile | null;
 }
 
 export type CreatePostPhotoInput = {
@@ -235,6 +248,8 @@ export type CreatePostInput = {
   taggedTripId?: string | null;
   taggedUserIds?: string[];
   photos: CreatePostPhotoInput[];
+  /** When true, others cannot comment on this post. */
+  commentsDisabled?: boolean;
 };
 
 export interface FeedAlbumCard {
@@ -257,6 +272,11 @@ export interface DmThread {
   otherUserId: string;
   updatedAt: string;
   lastPreview?: string;
+  unreadCount?: number;
+  /** Demo / local read cursor */
+  lastReadAt?: string;
+  /** Populated by list_dm_inbox when available — avoids N+1 profile fetches. */
+  otherProfile?: ChatProfile | null;
 }
 
 export interface ChatNotification {

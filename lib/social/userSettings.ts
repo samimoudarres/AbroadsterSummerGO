@@ -34,6 +34,7 @@ export const NOTIF_PREF_LABELS: { key: NotifPrefKey; label: string }[] = [
 export type OnboardingFlags = {
   first_map_done?: boolean;
   suggested_overlay_done?: boolean;
+  product_tour_done?: boolean;
 };
 
 export type UserSettings = {
@@ -68,5 +69,6 @@ export function mergeOnboarding(raw: unknown): OnboardingFlags {
   return {
     first_map_done: Boolean(obj.first_map_done),
     suggested_overlay_done: Boolean(obj.suggested_overlay_done),
+    product_tour_done: Boolean(obj.product_tour_done),
   };
 }

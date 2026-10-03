@@ -1,9 +1,12 @@
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { Image } from 'react-native';
 
-/** Longest edge for post/album uploads — sharp on phones, much smaller files. */
+/** Longest edge for post uploads — sharp on phones, much smaller files. */
 const MAX_EDGE = 2048;
 const JPEG_QUALITY = 0.8;
+/** Album batch uploads: smaller to avoid OOM when selecting ~100 photos. */
+const ALBUM_MAX_EDGE = 1600;
+const ALBUM_JPEG_QUALITY = 0.72;
 
 export type OptimizedUpload = {
   uri: string;
@@ -32,25 +35,29 @@ function getImageSize(uri: string): Promise<{ w: number; h: number } | null> {
  */
 export async function optimizeLocalImageForUpload(
   localUri: string,
+  opts?: { album?: boolean },
 ): Promise<OptimizedUpload> {
   if (!localUri || typeof localUri !== 'string' || isRemoteOrDataUri(localUri)) {
     return { uri: localUri, jpeg: false };
   }
 
+  const maxEdge = opts?.album ? ALBUM_MAX_EDGE : MAX_EDGE;
+  const quality = opts?.album ? ALBUM_JPEG_QUALITY : JPEG_QUALITY;
+
   try {
     const size = await getImageSize(localUri);
     const actions: Array<{ resize: { width: number } | { height: number } }> =
       [];
-    if (size && Math.max(size.w, size.h) > MAX_EDGE) {
+    if (size && Math.max(size.w, size.h) > maxEdge) {
       if (size.w >= size.h) {
-        actions.push({ resize: { width: MAX_EDGE } });
+        actions.push({ resize: { width: maxEdge } });
       } else {
-        actions.push({ resize: { height: MAX_EDGE } });
+        actions.push({ resize: { height: maxEdge } });
       }
     }
 
     const result = await manipulateAsync(localUri, actions, {
-      compress: JPEG_QUALITY,
+      compress: quality,
       format: SaveFormat.JPEG,
     });
     if (!result.uri) return { uri: localUri, jpeg: false };

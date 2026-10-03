@@ -14,7 +14,7 @@ import {
   ensureImageUri,
   toImageSource,
 } from '../../lib/images';
-import { storageDisplayUrl } from '../../lib/images/displayUrl';
+import { avatarDisplayUrl } from '../../lib/images/displayUrl';
 
 interface AvatarProps {
   source?: ImageSource | null;
@@ -28,7 +28,7 @@ interface AvatarProps {
 /**
  * Resolves require() assets and remote URLs the same way map pins do,
  * so avatars render on web and native.
- * Uses RN Image (stable on iOS) + small display transforms for faster loads.
+ * Uses RN Image (stable on iOS) + retina-aware display transforms.
  */
 export function Avatar({
   source,
@@ -39,7 +39,7 @@ export function Avatar({
 }: AvatarProps) {
   const [uri, setUri] = useState<string | null>(() => {
     if (typeof source === 'string' && source) {
-      return storageDisplayUrl(source, 'avatar');
+      return avatarDisplayUrl(source, size);
     }
     return null;
   });
@@ -52,14 +52,14 @@ export function Avatar({
         return;
       }
       if (typeof source === 'string') {
-        if (!cancelled) setUri(storageDisplayUrl(source, 'avatar'));
+        if (!cancelled) setUri(avatarDisplayUrl(source, size));
         return;
       }
       try {
         const resolved = await ensureImageUri(source);
         if (!cancelled) {
           setUri(
-            resolved ? storageDisplayUrl(resolved, 'avatar') || resolved : null,
+            resolved ? avatarDisplayUrl(resolved, size) || resolved : null,
           );
         }
       } catch {
@@ -69,7 +69,7 @@ export function Avatar({
     return () => {
       cancelled = true;
     };
-  }, [source]);
+  }, [source, size]);
 
   const box: StyleProp<ImageStyle> = [
     {
@@ -83,7 +83,12 @@ export function Avatar({
 
   if (uri) {
     return (
-      <Image source={{ uri }} style={box} accessibilityIgnoresInvertColors />
+      <Image
+        source={{ uri }}
+        style={box}
+        resizeMode="cover"
+        accessibilityIgnoresInvertColors
+      />
     );
   }
 
@@ -93,6 +98,7 @@ export function Avatar({
       <Image
         source={{ uri: defaultAvatarUrl(name || 'A') }}
         style={box}
+        resizeMode="cover"
         accessibilityIgnoresInvertColors
       />
     );

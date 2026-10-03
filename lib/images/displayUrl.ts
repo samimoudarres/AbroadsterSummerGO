@@ -15,8 +15,8 @@ type TransformOpts = {
 };
 
 const PRESETS: Record<Exclude<DisplaySize, 'full'>, TransformOpts> = {
-  // Profile / list avatars — tiny, must feel instant
-  avatar: { width: 96, height: 96, resize: 'cover', quality: 65 },
+  // Profile / list avatars — 3x enough for up to ~85pt circles on retina
+  avatar: { width: 256, height: 256, resize: 'cover', quality: 85 },
   // Profile post grid + album photo tiles (~130px on device)
   grid: { width: 320, height: 320, resize: 'cover', quality: 65 },
   // Album preview cards on profile rail
@@ -45,10 +45,12 @@ export function isStorageObjectPublicUrl(url: string): boolean {
 /**
  * Rewrite a Supabase public object URL to a sized render URL.
  * Returns the original string when transform does not apply.
+ * Optional `override` lets callers request sharper dimensions (e.g. large profile avatars).
  */
 export function storageDisplayUrl(
   url: string | null | undefined,
   size: DisplaySize = 'feed',
+  override?: Partial<TransformOpts>,
 ): string {
   if (url == null) return '';
   const raw = String(url).trim();
@@ -56,7 +58,7 @@ export function storageDisplayUrl(
   if (isStorageRenderUrl(raw)) return raw;
   if (!isStorageObjectPublicUrl(raw)) return raw;
 
-  const preset = PRESETS[size];
+  const preset = { ...PRESETS[size], ...override };
   // Strip prior query (e.g. ?t= cache-bust) — transforms use their own params.
   const base = raw.split('?')[0] ?? raw;
   const renderBase = base.replace(OBJECT_PUBLIC, RENDER_PUBLIC);
@@ -66,6 +68,19 @@ export function storageDisplayUrl(
   params.set('resize', preset.resize ?? 'cover');
   params.set('quality', String(preset.quality ?? 70));
   return `${renderBase}?${params.toString()}`;
+}
+
+/** Avatar URL sized for the on-screen point size (requests ~3x for retina). */
+export function avatarDisplayUrl(
+  url: string | null | undefined,
+  pointSize: number,
+): string {
+  const dim = Math.min(512, Math.max(160, Math.ceil(pointSize * 3)));
+  return storageDisplayUrl(url, 'avatar', {
+    width: dim,
+    height: dim,
+    quality: 85,
+  });
 }
 
 /** Map any Image-ish source through a display size (numbers / empty untouched). */

@@ -117,6 +117,15 @@ Deno.serve(async (req) => {
   });
 
   if (!error && data.user?.id) {
+    const officialId = 'fa989cf9-6770-48d3-a715-dd095c6dee38';
+    try {
+      await admin.from('friendships').upsert(
+        { user_id: data.user.id, friend_id: officialId },
+        { onConflict: 'user_id,friend_id', ignoreDuplicates: true },
+      );
+    } catch {
+      // Profile trigger may race; client signup also ensures friendship.
+    }
     return json(200, {
       userId: data.user.id,
       authEmail,

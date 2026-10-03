@@ -95,9 +95,17 @@ interface MapScreenProps {
   onConsumedSchoolNav?: () => void;
   /** False when map tab is hidden — pause marker sync work. */
   mapActive?: boolean;
-  /** First post-signup map: Europe zoom + home university filter once. */
+  /** First post-signup map: Europe overview (all pins), then zoom to you. */
   firstMapOnboarding?: boolean;
   onConsumedFirstMapOnboarding?: () => void;
+  /**
+   * After suggested friends closes: clear filters, show Europe, then fly to
+   * the user's location. Bump to retrigger.
+   */
+  mapIntroNonce?: number;
+  onMapIntroComplete?: () => void;
+  /** Keep Europe-wide camera until post-signup intro finishes. */
+  holdWideCamera?: boolean;
 }
 
 function feedFingerprint(feed: ChatTrip[]): string {
@@ -227,6 +235,9 @@ export function MapScreen({
   mapActive = true,
   firstMapOnboarding = false,
   onConsumedFirstMapOnboarding,
+  mapIntroNonce = 0,
+  onMapIntroComplete,
+  holdWideCamera = false,
 }: MapScreenProps) {
   const sheetRef = useRef<BottomSheet>(null);
   const topInset = usePhoneTopPad(10);
@@ -305,6 +316,8 @@ export function MapScreen({
   } | null>(null);
   const locationPrivacyRef = useRef<'exact' | 'city' | 'hidden'>('city');
   const didCenterOnMeRef = useRef(false);
+  const holdWideCameraRef = useRef(holdWideCamera);
+  holdWideCameraRef.current = holdWideCamera || firstMapOnboarding;
 
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [showPersonSheet, setShowPersonSheet] = useState(false);
@@ -396,26 +409,16 @@ export function MapScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schoolNav]);
 
-  // Post-signup: Europe overview + home university filter (once)
+  // Post-signup: do NOT auto-filter to school. Mark first_map_done; camera
+  // intro (Europe → you) runs via mapIntroNonce after suggested friends closes.
   useEffect(() => {
     if (!firstMapOnboarding) return;
     let cancelled = false;
     (async () => {
       try {
         await initChat();
-        const me = await chatRepo.getMe();
-        if (cancelled) return;
-        const homeLabel = (me.homeUniversity || '').trim();
-        if (homeLabel) {
-          const chip =
-            findFilterChipForLabel(homeLabel, 'university') ||
-            chipFromSchoolLabel(homeLabel, 'university');
-          if (chip) {
-            promoteSchoolChip(chip);
-          }
-        }
-        // Keep camera on this account's profile pin (set by home-location effect).
-        sheetRef.current?.snapToIndex(2);
+        setSelectedFilterIds([]);
+        setLayerFilter('all');
         try {
           await chatRepo.updateMySettings({
             onboarding: { first_map_done: true },
@@ -432,6 +435,44 @@ export function MapScreen({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firstMapOnboarding]);
+
+  // Suggested friends dismissed → wide Europe view (all pins), then zoom to you
+  useEffect(() => {
+    if (!mapIntroNonce) return;
+    let cancelled = false;
+    let zoomTimer: ReturnType<typeof setTimeout> | null = null;
+    (async () => {
+      setSelectedFilterIds([]);
+      setLayerFilter('all');
+      sheetRef.current?.snapToIndex(2);
+      // Continental Europe so every pin reads at once
+      const europe = {
+        latitude: 48.2,
+        longitude: 10.5,
+        zoom: 3.35,
+      };
+      setCenter({ latitude: europe.latitude, longitude: europe.longitude });
+      setFlyTo(europe);
+
+      const target =
+        userLocationRef.current ||
+        deviceGpsRef.current ||
+        hostPinRef.current;
+      zoomTimer = setTimeout(() => {
+        if (cancelled) return;
+        if (target) {
+          setCenter(target);
+          setFlyTo({ ...target, zoom: 12.2 });
+        }
+        onMapIntroComplete?.();
+      }, 1600);
+    })();
+    return () => {
+      cancelled = true;
+      if (zoomTimer) clearTimeout(zoomTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapIntroNonce]);
 
   useEffect(() => {
     let unsub = () => {};
@@ -523,12 +564,20 @@ export function MapScreen({
               userLocationRef.current = home;
               setUserLocation(home);
             }
-            // First open: GPS if we already have it, otherwise the profile pin
+            // First open: stay wide until post-signup map intro runs
             if (!didCenterOnMeRef.current) {
               didCenterOnMeRef.current = true;
               const start = gps ?? home;
               setCenter(start);
-              setFlyTo({ ...start, zoom: 12.5 });
+              if (holdWideCameraRef.current) {
+                setFlyTo({
+                  latitude: 48.2,
+                  longitude: 10.5,
+                  zoom: 3.35,
+                });
+              } else {
+                setFlyTo({ ...start, zoom: 12.5 });
+              }
             }
           }
 
@@ -935,7 +984,11 @@ export function MapScreen({
         if (!didCenterOnMeRef.current && !deviceGpsRef.current) {
           didCenterOnMeRef.current = true;
           setCenter(home);
-          setFlyTo({ ...home, zoom: 12.5 });
+          if (holdWideCameraRef.current) {
+            setFlyTo({ latitude: 48.2, longitude: 10.5, zoom: 3.35 });
+          } else {
+            setFlyTo({ ...home, zoom: 12.5 });
+          }
         }
 
         const seedMe = pinMeAtDeviceGps(
@@ -987,7 +1040,11 @@ export function MapScreen({
           if (!didCenterOnMeRef.current) {
             didCenterOnMeRef.current = true;
             setCenter(firstFix);
-            setFlyTo({ ...firstFix, zoom: 12.5 });
+            if (holdWideCameraRef.current) {
+              setFlyTo({ latitude: 48.2, longitude: 10.5, zoom: 3.35 });
+            } else {
+              setFlyTo({ ...firstFix, zoom: 12.5 });
+            }
           }
         }
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -67,6 +68,7 @@ export function ChannelSidebar({
   const [profiles, setProfiles] = useState<Record<string, ChatProfile>>({});
   const [tripChannels, setTripChannels] = useState<TripChannel[]>([]);
   const [keyboardPad, setKeyboardPad] = useState(0);
+  const [loadingInbox, setLoadingInbox] = useState(false);
 
   useEffect(() => {
     const show = Keyboard.addListener(
@@ -87,31 +89,89 @@ export function ChannelSidebar({
     x.value = withTiming(open ? 0 : -DRAWER_WIDTH, { duration: 220 });
   }, [open, x]);
 
+  // Prefetch inbox even when closed so opening the drawer is instant
   useEffect(() => {
-    if (!open) return;
     let cancelled = false;
-    const load = async () => {
-      const list = await chatRepo.listDmThreads();
-      const map: Record<string, ChatProfile> = {};
-      for (const t of list) {
-        const p = await chatRepo.getProfile(t.otherUserId);
-        if (p) map[t.otherUserId] = p;
-      }
-      const trips = await chatRepo.listMyTripChannels();
-      if (!cancelled) {
-        setThreads(list);
-        setProfiles(map);
-        setTripChannels(trips);
+    const load = async (showSpinner: boolean) => {
+      if (showSpinner) setLoadingInbox(true);
+      try {
+        const [list, trips] = await Promise.all([
+          chatRepo.listDmThreads(),
+          chatRepo.listMyTripChannels(),
+        ]);
+        const map: Record<string, ChatProfile> = {};
+        const missing: string[] = [];
+        for (const t of list) {
+          if (t.otherProfile) {
+            map[t.otherUserId] = t.otherProfile;
+          } else {
+            missing.push(t.otherUserId);
+          }
+        }
+        // Parallel profile fetch only for threads missing embedded profiles
+        if (missing.length) {
+          const fetched = await Promise.all(
+            missing.map((id) => chatRepo.getProfile(id)),
+          );
+          fetched.forEach((p, i) => {
+            if (p) map[missing[i]] = p;
+          });
+        }
+        if (!cancelled) {
+          setThreads(list);
+          setProfiles(map);
+          setTripChannels(trips);
+        }
+      } finally {
+        if (!cancelled && showSpinner) setLoadingInbox(false);
       }
     };
-    load();
+    void load(false);
     const unsub = subscribeChat(() => {
-      load();
+      void load(false);
     });
     return () => {
       cancelled = true;
       unsub();
     };
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    // Soft refresh when drawer opens (cached rows already visible)
+    let cancelled = false;
+    (async () => {
+      if (!threads.length) setLoadingInbox(true);
+      try {
+        const list = await chatRepo.listDmThreads();
+        const map: Record<string, ChatProfile> = { ...profiles };
+        const missing: string[] = [];
+        for (const t of list) {
+          if (t.otherProfile) map[t.otherUserId] = t.otherProfile;
+          else if (!map[t.otherUserId]) missing.push(t.otherUserId);
+        }
+        if (missing.length) {
+          const fetched = await Promise.all(
+            missing.map((id) => chatRepo.getProfile(id)),
+          );
+          fetched.forEach((p, i) => {
+            if (p) map[missing[i]] = p;
+          });
+        }
+        const trips = await chatRepo.listMyTripChannels();
+        if (!cancelled) {
+          setThreads(list);
+          setProfiles(map);
+          setTripChannels(trips);
+        }
+      } finally {
+        if (!cancelled) setLoadingInbox(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
@@ -129,10 +189,6 @@ export function ChannelSidebar({
   const drawerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: x.value }],
   }));
-
-  if (!open) {
-    // still render for animation exit — use opacity gate
-  }
 
   return (
     <View
@@ -261,30 +317,60 @@ export function ChannelSidebar({
                   <Text style={styles.dmName}>{u.fullName}</Text>
                 </Pressable>
               ))
-            : threads.length === 0
+            : loadingInbox && threads.length === 0
+              ? (
+                  <View style={styles.inboxLoading}>
+                    <ActivityIndicator color={colors.programBlue} />
+                  </View>
+                )
+              : threads.length === 0
               ? (
                   <Text style={styles.emptyAirMail}>
                     No conversations yet — search someone to start AirMail.
                   </Text>
                 )
               : threads.map((t) => {
-                const u = profiles[t.otherUserId];
+                const u = profiles[t.otherUserId] ?? t.otherProfile;
                 if (!u) return null;
+                const unread = (t.unreadCount ?? 0) > 0;
                 return (
                   <Pressable
                     key={t.id}
                     style={styles.dmRow}
                     onPress={() => onOpenDm(u.id)}
                   >
-                    <Avatar source={u.avatar} name={u.fullName} size={36} />
+                    <View>
+                      <Avatar source={u.avatar} name={u.fullName} size={36} />
+                      {unread ? <View style={styles.dmUnreadDot} /> : null}
+                    </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.dmName}>{u.fullName}</Text>
+                      <Text
+                        style={[styles.dmName, unread && styles.dmNameUnread]}
+                        numberOfLines={1}
+                      >
+                        {u.fullName}
+                      </Text>
                       {t.lastPreview ? (
-                        <Text style={styles.dmPreview} numberOfLines={1}>
+                        <Text
+                          style={[
+                            styles.dmPreview,
+                            unread && styles.dmPreviewUnread,
+                          ]}
+                          numberOfLines={1}
+                        >
                           {t.lastPreview}
                         </Text>
                       ) : null}
                     </View>
+                    {unread ? (
+                      <View style={styles.dmUnreadCount}>
+                        <Text style={styles.dmUnreadCountText}>
+                          {(t.unreadCount ?? 0) > 99
+                            ? '99+'
+                            : String(t.unreadCount)}
+                        </Text>
+                      </View>
+                    ) : null}
                   </Pressable>
                 );
               })}
@@ -372,11 +458,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
-  dmAvatar: { width: 36, height: 36, borderRadius: 18 },
-  dmName: { fontFamily: fonts.bold, fontSize: 15, color: colors.black, flexShrink: 1 },
+  dmName: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.black,
+    flexShrink: 1,
+  },
+  dmNameUnread: { fontFamily: fonts.extraBold },
   dmPreview: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  dmPreviewUnread: { color: colors.black, fontFamily: fonts.bold },
+  dmUnreadDot: {
+    position: 'absolute',
+    right: -1,
+    top: -1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#E53935',
+    borderWidth: 1.5,
+    borderColor: '#F7F7F8',
+  },
+  dmUnreadCount: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    backgroundColor: '#E53935',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dmUnreadCountText: {
+    color: '#fff',
+    fontSize: 11,
+    fontFamily: fonts.extraBold,
+  },
+  inboxLoading: { paddingVertical: 16, alignItems: 'center' },
   emptyAirMail: {
     fontFamily: fonts.regular,
     fontSize: 13,

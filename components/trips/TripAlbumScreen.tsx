@@ -104,6 +104,10 @@ export function TripAlbumScreen({
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [pendingUris, setPendingUris] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [inviteQuery, setInviteQuery] = useState('');
   const [inviteHits, setInviteHits] = useState<ChatProfile[]>([]);
   const [confirming, setConfirming] = useState(false);
@@ -297,10 +301,15 @@ export function TripAlbumScreen({
   const confirmUpload = async () => {
     if (!trip || !pendingUris.length || uploading) return;
     setUploading(true);
+    const uris = [...pendingUris];
+    const count = uris.length;
+    setUploadProgress({ done: 0, total: count });
+    // Clear preview thumbs immediately so we don't keep 100 bitmaps in memory
+    setPendingUris([]);
     try {
-      const count = pendingUris.length;
-      await chatRepo.uploadTripAlbumPhotos(trip.id, pendingUris);
-      setPendingUris([]);
+      await chatRepo.uploadTripAlbumPhotos(trip.id, uris, {
+        onProgress: (done, total) => setUploadProgress({ done, total }),
+      });
       await refresh();
       Alert.alert(
         'Photos uploaded',
@@ -312,9 +321,12 @@ export function TripAlbumScreen({
         data: { tripId: trip.id, kind: 'album_photos_uploaded' },
       });
     } catch (e: any) {
+      // Restore selection so the user can retry without re-picking
+      setPendingUris(uris);
       Alert.alert('Upload failed', e?.message ?? 'Try again');
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -854,45 +866,67 @@ export function TripAlbumScreen({
               <Ionicons name="images-outline" size={20} color={colors.white} />
               <Text style={styles.uploadBtnText}>Add photos</Text>
             </Pressable>
-            {pendingUris.length > 0 ? (
+            {pendingUris.length > 0 || uploading ? (
               <View style={styles.pendingBox}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 8 }}
-                >
-                  {pendingUris.map((uri, i) => (
-                    <View key={`${uri}-${i}`} style={styles.pendingThumbWrap}>
-                      <CachedImage
-                        source={toImageSource(uri) as any}
-                        style={styles.pendingThumb}
-                        contentFit="cover"
-                      />
-                      <Pressable
-                        style={styles.pendingRemove}
-                        onPress={() =>
-                          setPendingUris((prev) => prev.filter((_, j) => j !== i))
-                        }
-                      >
-                        <Ionicons name="close" size={12} color={colors.white} />
-                      </Pressable>
-                    </View>
-                  ))}
-                </ScrollView>
-                <Pressable
-                  style={[styles.confirmUpload, uploading && { opacity: 0.6 }]}
-                  disabled={uploading}
-                  onPress={() => void confirmUpload()}
-                >
-                  {uploading ? (
+                {pendingUris.length > 0 ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8 }}
+                  >
+                    {pendingUris.slice(0, 8).map((uri, i) => (
+                      <View key={`${uri}-${i}`} style={styles.pendingThumbWrap}>
+                        <CachedImage
+                          source={toImageSource(uri) as any}
+                          style={styles.pendingThumb}
+                          contentFit="cover"
+                        />
+                        <Pressable
+                          style={styles.pendingRemove}
+                          onPress={() =>
+                            setPendingUris((prev) =>
+                              prev.filter((_, j) => j !== i),
+                            )
+                          }
+                        >
+                          <Ionicons name="close" size={12} color={colors.white} />
+                        </Pressable>
+                      </View>
+                    ))}
+                    {pendingUris.length > 8 ? (
+                      <View style={styles.pendingMore}>
+                        <Text style={styles.pendingMoreText}>
+                          +{pendingUris.length - 8}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </ScrollView>
+                ) : null}
+                {uploading && uploadProgress ? (
+                  <Text style={styles.uploadProgressText}>
+                    Uploading {uploadProgress.done}/{uploadProgress.total}…
+                  </Text>
+                ) : null}
+                {pendingUris.length > 0 ? (
+                  <Pressable
+                    style={[styles.confirmUpload, uploading && { opacity: 0.6 }]}
+                    disabled={uploading}
+                    onPress={() => void confirmUpload()}
+                  >
+                    {uploading ? (
+                      <ActivityIndicator color={colors.white} />
+                    ) : (
+                      <Text style={styles.confirmUploadText}>
+                        Upload {pendingUris.length} photo
+                        {pendingUris.length === 1 ? '' : 's'}
+                      </Text>
+                    )}
+                  </Pressable>
+                ) : uploading ? (
+                  <View style={[styles.confirmUpload, { opacity: 0.85 }]}>
                     <ActivityIndicator color={colors.white} />
-                  ) : (
-                    <Text style={styles.confirmUploadText}>
-                      Upload {pendingUris.length} photo
-                      {pendingUris.length === 1 ? '' : 's'}
-                    </Text>
-                  )}
-                </Pressable>
+                  </View>
+                ) : null}
               </View>
             ) : null}
           </View>
@@ -1636,6 +1670,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  pendingMore: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
+    backgroundColor: 'rgba(23,88,100,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingMoreText: {
+    fontFamily: fonts.extraBold,
+    fontSize: 14,
+    color: colors.programBlue,
+  },
+  uploadProgressText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.programBlue,
+    textAlign: 'center',
   },
   confirmUpload: {
     backgroundColor: colors.openJoin,

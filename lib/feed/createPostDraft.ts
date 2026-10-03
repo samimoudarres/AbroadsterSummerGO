@@ -18,6 +18,7 @@ export type CreatePostDraft = {
   audienceCommunityIds: string[];
   taggedTripId: string | null;
   taggedUserIds: string[];
+  commentsDisabled?: boolean;
 };
 
 let draft: CreatePostDraft | null = null;

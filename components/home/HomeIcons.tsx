@@ -90,6 +90,24 @@ export function ShareIcon({
   );
 }
 
+/** Speech bubble — comments (between stamp and share). */
+export function CommentIcon({
+  size = 24,
+  color = '#262626',
+}: {
+  size?: number;
+  color?: string;
+}) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M20 2H4C2.9 2 2 2.9 2 4V16C2 17.1 2.9 18 4 18H6V22L11 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2ZM20 16H10.2L7.5 18.3V16H4V4H20V16Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
 export function LocationPinIcon({
   size = 18,
   color = 'rgba(4,0,0,0.5)',

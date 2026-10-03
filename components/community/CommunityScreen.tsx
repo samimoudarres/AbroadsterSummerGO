@@ -97,6 +97,9 @@ interface CommunityScreenProps {
   onOpenTaggedTrip?: (tripId: string) => void;
   /** Open the full trip album / trip screen from a trip message card. */
   onOpenTripAlbum?: (tripId: string) => void;
+  /** Product tour: force the left channel drawer open. */
+  forceSidebarOpen?: boolean;
+  onConsumedForceSidebar?: () => void;
 }
 
 export function CommunityScreen({
@@ -110,6 +113,8 @@ export function CommunityScreen({
   onViewSharedPost,
   onOpenTaggedTrip,
   onOpenTripAlbum,
+  forceSidebarOpen = false,
+  onConsumedForceSidebar,
 }: CommunityScreenProps) {
   const insets = useSafeAreaInsets();
   const topPad =
@@ -132,6 +137,7 @@ export function CommunityScreen({
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [dmUnreadTotal, setDmUnreadTotal] = useState(0);
   const [attachOpen, setAttachOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [tripMembers, setTripMembers] = useState<string[] | null>(null);
@@ -153,6 +159,12 @@ export function CommunityScreen({
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    if (!forceSidebarOpen) return;
+    setSidebarOpen(true);
+    onConsumedForceSidebar?.();
+  }, [forceSidebarOpen, onConsumedForceSidebar]);
 
   const abroad = communities.find((c) => c.kind === 'abroad');
   const home = communities.find((c) => c.kind === 'home');
@@ -414,6 +426,41 @@ export function CommunityScreen({
     void refreshMessages('replace');
   }, [refreshMessages]);
 
+  // Prefetch AirMail inbox + keep unread badge fresh
+  useEffect(() => {
+    let cancelled = false;
+    const refreshUnread = async () => {
+      try {
+        const n = await chatRepo.countDmUnread();
+        if (!cancelled) setDmUnreadTotal(n);
+      } catch {
+        // ignore
+      }
+    };
+    void refreshUnread();
+    const unsub = subscribeChat(() => {
+      void refreshUnread();
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, []);
+
+  // Opening a DM marks it read (clears badge + message notifications)
+  useEffect(() => {
+    if (!dmThreadId) return;
+    void (async () => {
+      try {
+        await chatRepo.markDmThreadRead(dmThreadId);
+        const n = await chatRepo.countDmUnread();
+        setDmUnreadTotal(n);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [dmThreadId]);
+
   // Live thread: realtime + light poll while app is foregrounded
   useEffect(() => {
     if (!target) return;
@@ -543,6 +590,25 @@ export function CommunityScreen({
     setDraft('');
     const replyId = replyTo?.id;
     setReplyTo(null);
+    // Optimistic bubble — Instagram-style instant send (no await before paint)
+    const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimistic: ChatMessage = {
+      id: tempId,
+      channelId: target.type !== 'dm' ? (target as any).channelId : undefined,
+      dmThreadId: target.type === 'dm' ? target.threadId : undefined,
+      senderId: DEMO_ME_ID,
+      kind: 'text',
+      body,
+      replyToId: replyId ?? null,
+      createdAt: new Date().toISOString(),
+      reactions: [],
+    };
+    messagesRef.current = [...messagesRef.current, optimistic];
+    setMessages(messagesRef.current);
+    stickToBottomRef.current = true;
+    requestAnimationFrame(() =>
+      listRef.current?.scrollToEnd({ animated: true }),
+    );
     try {
       const sent = await chatRepo.sendMessage({
         target,
@@ -551,19 +617,16 @@ export function CommunityScreen({
         replyToId: replyId,
       });
       if (sent?.id) {
-        // Sync ref immediately so a concurrent poll can't wipe the send
-        if (!messagesRef.current.some((m) => m.id === sent.id)) {
-          messagesRef.current = [...messagesRef.current, sent];
-        }
+        const withoutTemp = messagesRef.current.filter((m) => m.id !== tempId);
+        messagesRef.current = withoutTemp.some((m) => m.id === sent.id)
+          ? withoutTemp
+          : [...withoutTemp, sent];
         setMessages(messagesRef.current);
       }
-      stickToBottomRef.current = true;
-      requestAnimationFrame(() =>
-        listRef.current?.scrollToEnd({ animated: true }),
-      );
-      // Merge/poll — never blind-replace (empty reload was wiping sent messages)
-      await refreshMessages('poll');
+      void refreshMessages('poll');
     } catch (e: any) {
+      messagesRef.current = messagesRef.current.filter((m) => m.id !== tempId);
+      setMessages(messagesRef.current);
       setDraft(body);
       if (replyId) {
         const prev = messagesRef.current.find((m) => m.id === replyId);
@@ -587,7 +650,7 @@ export function CommunityScreen({
     requestAnimationFrame(() =>
       listRef.current?.scrollToEnd({ animated: true }),
     );
-    await refreshMessages('poll');
+    void refreshMessages('poll');
   }
 
   const listData = useMemo(() => {
@@ -646,6 +709,13 @@ export function CommunityScreen({
         <View style={[styles.header, { paddingTop: topPad }]}>
           <Pressable style={styles.chatBtn} onPress={() => setSidebarOpen(true)}>
             <Ionicons name="chatbubbles" size={22} color={colors.black} />
+            {dmUnreadTotal > 0 ? (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>
+                  {dmUnreadTotal > 99 ? '99+' : String(dmUnreadTotal)}
+                </Text>
+              </View>
+            ) : null}
           </Pressable>
           <View style={styles.pillsTrack}>
             {abroad ? (
@@ -1274,6 +1344,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8E8E8',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: '#E53935',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E8E8E8',
+  },
+  unreadBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontFamily: fonts.extraBold,
+    lineHeight: 12,
   },
   moreWrap: {
     position: 'relative',

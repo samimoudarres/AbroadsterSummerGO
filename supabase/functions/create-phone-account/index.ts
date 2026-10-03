@@ -89,8 +89,21 @@ Deno.serve(async (req) => {
     return json(400, { error: error.message || 'Could not create account.' });
   }
 
+  const userId = data.user?.id ?? null;
+  if (userId) {
+    const officialId = 'fa989cf9-6770-48d3-a715-dd095c6dee38';
+    try {
+      await admin.from('friendships').upsert(
+        { user_id: userId, friend_id: officialId },
+        { onConflict: 'user_id,friend_id', ignoreDuplicates: true },
+      );
+    } catch {
+      // Client signup also ensures friendship.
+    }
+  }
+
   return json(200, {
-    userId: data.user?.id ?? null,
+    userId,
     authEmail,
   });
 });
