@@ -154,11 +154,16 @@ export function CommunityScreen({
   const stickToBottomRef = useRef(true);
   const loadingOlderRef = useRef(false);
   const lastCommsRefreshRef = useRef(0);
+  const dmThreadIdRef = useRef<string | null>(null);
   const slide = useSharedValue(0);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    dmThreadIdRef.current = dmThreadId;
+  }, [dmThreadId]);
 
   useEffect(() => {
     if (!forceSidebarOpen) return;
@@ -431,6 +436,15 @@ export function CommunityScreen({
     let cancelled = false;
     const refreshUnread = async () => {
       try {
+        // If a DM is open, treat it as read before counting so the red dot clears
+        const openId = dmThreadIdRef.current;
+        if (openId) {
+          try {
+            await chatRepo.markDmThreadRead(openId);
+          } catch {
+            // still try to count
+          }
+        }
         const n = await chatRepo.countDmUnread();
         if (!cancelled) setDmUnreadTotal(n);
       } catch {
@@ -453,10 +467,16 @@ export function CommunityScreen({
     void (async () => {
       try {
         await chatRepo.markDmThreadRead(dmThreadId);
-        const n = await chatRepo.countDmUnread();
+        const threads = await chatRepo.listDmThreads();
+        // Open thread counts as fully read even if the inbox RPC is briefly stale
+        const n = threads.reduce(
+          (sum, t) =>
+            sum + (t.id === dmThreadId ? 0 : t.unreadCount ?? 0),
+          0,
+        );
         setDmUnreadTotal(n);
       } catch {
-        // ignore
+        setDmUnreadTotal(0);
       }
     })();
   }, [dmThreadId]);

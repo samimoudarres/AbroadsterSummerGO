@@ -2907,8 +2907,10 @@ export const chatRepo = {
   async markDmThreadRead(threadId: string): Promise<void> {
     if (!(await useLive()) || !isUuid(threadId)) {
       await demoChat.markDmThreadRead(threadId);
+      notifyChatListeners();
       return;
     }
+    const me = await this.getMe();
     try {
       await supabase!.rpc('mark_dm_thread_read', { p_thread_id: threadId });
     } catch {
@@ -2916,9 +2918,10 @@ export const chatRepo = {
         await supabase!
           .from('dm_participants')
           .update({ last_read_at: new Date().toISOString() })
-          .eq('thread_id', threadId);
+          .eq('thread_id', threadId)
+          .eq('user_id', me.id);
       } catch {
-        // column may not exist yet
+        // column / policy may be missing
       }
     }
     // Also mark matching notification rows if RPC didn't

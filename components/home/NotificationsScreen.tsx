@@ -198,7 +198,9 @@ export function NotificationsScreen({
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const previewsRef = React.useRef(previews);
   previewsRef.current = previews;
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({
+    friends: true,
+  });
   const [busyId, setBusyId] = useState<string | null>(null);
   /** Locally resolved invite/join actions so buttons disappear after respond */
   const [resolved, setResolved] = useState<Record<string, 'accepted' | 'declined'>>(
@@ -515,9 +517,9 @@ export function NotificationsScreen({
         data={rows}
         keyExtractor={(row) => row.key}
         contentContainerStyle={{ paddingBottom: 40 }}
-        ListHeaderComponent={
+        ListFooterComponent={
           suggested.length > 0 ? (
-            <View style={styles.suggestedBlock}>
+            <View style={[styles.suggestedBlock, { borderBottomWidth: 0, borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8 }]}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Suggested accounts</Text>
               </View>
@@ -587,9 +589,9 @@ export function NotificationsScreen({
           ) : null
         }
         ListEmptyComponent={
-          suggested.length > 0 ? null : (
-            <Text style={styles.empty}>You’re all caught up.</Text>
-          )
+          <Text style={styles.empty}>
+            You’re all caught up — friend activity will show up here.
+          </Text>
         }
         renderItem={({ item: row }) => {
           if (row.type === 'header') {
