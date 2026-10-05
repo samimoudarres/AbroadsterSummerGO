@@ -90,12 +90,11 @@ export function MapDrawer({
 
   const rows: RowItem[] = useMemo(() => {
     const places = items.filter((i) => i.kind === 'place');
-    const peopleAndTrips = items.filter(
-      (i) => i.kind === 'person' || i.kind === 'trip',
-    );
     const people = items.filter((i) => i.kind === 'person');
+    const trips = items.filter((i) => i.kind === 'trip');
     const schools = items.filter((i) => i.kind === 'program');
     const out: RowItem[] = [];
+    const searching = searchQuery.trim().length > 0;
 
     if (filterActive) {
       out.push({
@@ -121,16 +120,46 @@ export function MapDrawer({
       return out;
     }
 
-    // People → Places → Schools (search + browse)
-    if (peopleAndTrips.length > 0) {
-      if (searchQuery.trim().length > 0) {
+    // Default map pull-up: friends (location/status) then their trips
+    if (!searching) {
+      if (people.length > 0) {
+        out.push({ kind: 'section', id: 'section-friends', title: 'Friends' });
+        out.push(...people);
+      }
+      if (trips.length > 0) {
         out.push({
           kind: 'section',
-          id: 'section-people',
-          title: 'People & trips',
+          id: 'section-trips',
+          title: 'Upcoming & planning trips',
+        });
+        out.push(...trips);
+      }
+      if (places.length > 0) {
+        out.push({ kind: 'section', id: 'section-places', title: 'Places' });
+        out.push(...places);
+      }
+      if (schools.length > 0) {
+        out.push({ kind: 'section', id: 'section-schools', title: 'Schools' });
+        out.push(...schools);
+      }
+      if (out.length === 0) {
+        out.push({
+          kind: 'empty',
+          id: 'empty-friends',
+          title: 'Add friends to see where they are and what trips they have planned',
         });
       }
-      out.push(...peopleAndTrips);
+      return out;
+    }
+
+    // Search: People → Trips → Places → Schools
+    if (people.length > 0 || trips.length > 0) {
+      out.push({
+        kind: 'section',
+        id: 'section-people',
+        title: 'People & trips',
+      });
+      out.push(...people, ...trips);
     }
     if (places.length > 0) {
       out.push({ kind: 'section', id: 'section-places', title: 'Places' });
@@ -371,8 +400,28 @@ function PersonRow({
           ) : null}
         </View>
         <View style={styles.statusRow}>
-          <View style={[styles.statusDot, { backgroundColor: colors.statusGreen }]} />
-          <Text style={[styles.statusText, { color: colors.statusGreen }]}>
+          <View
+            style={[
+              styles.statusDot,
+              {
+                backgroundColor:
+                  item.user.locationPrivacy === 'hidden'
+                    ? colors.filterGray
+                    : colors.statusGreen,
+              },
+            ]}
+          />
+          <Text
+            style={[
+              styles.statusText,
+              {
+                color:
+                  item.user.locationPrivacy === 'hidden'
+                    ? colors.filterGray
+                    : colors.statusGreen,
+              },
+            ]}
+          >
             {item.statusLabel}
           </Text>
           <View style={styles.tinyDot} />

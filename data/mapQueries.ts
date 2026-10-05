@@ -40,27 +40,33 @@ function isSeedUserId(id: string): boolean {
 function applyFriendFlag(
   u: UserProfile,
   friendSet: Set<string> | null,
-  mutualSet: Set<string> | null,
+  _mutualSet: Set<string> | null,
 ): UserProfile {
-  if (!friendSet && !mutualSet) return u;
+  if (!friendSet) return u;
   if (u.isCurrentUser) {
     return { ...u, isFriend: true };
   }
-  const isMutual = mutualSet?.has(u.id) ?? friendSet?.has(u.id) ?? u.isFriend;
+  // Directed friends (people YOU added) — matches Abroadster one-way model
+  const isFriend = friendSet.has(u.id) || u.isFriend;
   if (allowDemoSeedMerge() && isSeedUserId(u.id)) {
-    return { ...u, isFriend: u.isFriend || isMutual };
+    return { ...u, isFriend: u.isFriend || isFriend };
   }
-  return { ...u, isFriend: isMutual };
+  return { ...u, isFriend };
 }
 
 function canPinUser(
   user: UserProfile,
-  mutualSet: Set<string> | null,
+  friendSet: Set<string> | null,
 ): boolean {
-  if (user.isCurrentUser) return user.locationPrivacy !== 'hidden';
+  if (user.isCurrentUser) {
+    return user.locationPrivacy !== 'hidden' && hasMapCoords(user);
+  }
+  // Respect their location privacy — hidden friends stay off map pins
   if (user.locationPrivacy === 'hidden') return false;
-  if (!mutualSet) return user.isFriend;
-  return mutualSet.has(user.id);
+  if (!hasMapCoords(user)) return false;
+  if (user.isFriend) return true;
+  if (!friendSet) return false;
+  return friendSet.has(user.id);
 }
 
 export interface VisibleMapData {
@@ -73,6 +79,15 @@ export interface VisibleMapData {
 
 /** Apply privacy-aware coordinates before any map / nearby math. */
 function locateUser(user: UserProfile): UserProfile | null {
+  if (user.locationPrivacy === 'hidden' && !user.isCurrentUser) {
+    // Keep friend in the pull-up list without a map pin coordinate.
+    return {
+      ...user,
+      latitude: Number.NaN,
+      longitude: Number.NaN,
+      locationLabel: 'Location hidden',
+    };
+  }
   const resolved = resolveMapLocation(user);
   if (!resolved) return null;
   return {
@@ -81,6 +96,14 @@ function locateUser(user: UserProfile): UserProfile | null {
     longitude: resolved.longitude,
     locationLabel: resolved.locationLabel,
   };
+}
+
+function hasMapCoords(user: UserProfile): boolean {
+  return (
+    Number.isFinite(user.latitude) &&
+    Number.isFinite(user.longitude) &&
+    !(user.latitude === 0 && user.longitude === 0)
+  );
 }
 
 function matchesProgramLabel(programName: string, label: string): boolean {
@@ -192,13 +215,34 @@ function personDetailLabel(user: UserProfile, trips: TripPin[]): string {
 }
 
 function personStatusLabel(user: UserProfile): string {
+  // Reflect what their privacy setting actually shares
+  if (user.locationPrivacy === 'hidden') {
+    return 'Location hidden';
+  }
+  if (
+    user.locationPrivacy === 'exact' &&
+    user.liveLatitude != null &&
+    user.liveLongitude != null
+  ) {
+    const live = (user.locationLabel || '').trim();
+    if (live) {
+      return live.toLowerCase().startsWith('in ') ? live : `In ${live}`;
+    }
+    return 'Sharing live location';
+  }
   const label = (user.locationLabel || '').trim();
-  if (label) {
+  if (label && label !== 'Abroad' && label !== 'Current location') {
     return label.toLowerCase().startsWith('in ') ? label : `In ${label}`;
   }
-  const city = user.hostCity || 'abroad';
-  const country = user.hostCountry;
-  return country ? `In ${city}, ${country}` : `In ${city}`;
+  const city = (user.hostCity || '').trim();
+  const country = (user.hostCountry || '').trim();
+  if (city) {
+    return country ? `In ${city}, ${country}` : `In ${city}`;
+  }
+  if (user.locationPrivacy === 'city') {
+    return 'City only';
+  }
+  return 'Abroad';
 }
 
 function tripTitle(trip: TripPin): string {
@@ -314,8 +358,10 @@ export function computeVisibleMapData(options: {
   const locatedUsers = [...byId.values()];
 
   // Stats always from current map viewport
-  const nearbyUsers = locatedUsers.filter((u) =>
-    isNearby(u.latitude, u.longitude, centerLat, centerLng, bounds),
+  const nearbyUsers = locatedUsers.filter(
+    (u) =>
+      hasMapCoords(u) &&
+      isNearby(u.latitude, u.longitude, centerLat, centerLng, bounds),
   );
 
   const schoolFilterOn = selectedFilters.length > 0;
@@ -323,6 +369,8 @@ export function computeVisibleMapData(options: {
   const uniFiltersActive = selectedFilters.filter((f) => f.type === 'university');
 
   const inView = (lat: number, lng: number) =>
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
     isNearby(lat, lng, centerLat, centerLng, bounds);
 
   // School-matched people (friends OR not) — always the full Abroadster roster
@@ -392,23 +440,27 @@ export function computeVisibleMapData(options: {
             }),
           );
 
-  // Pins: mutual friends only (school list still shows everyone in filteredPeople).
+  // Pins: friends you added (directed), respecting their location privacy.
+  // School list still shows everyone in filteredPeople for search/browse.
   const mapPeopleBase =
     layerFilter === 'upcoming' ||
     layerFilter === 'planning' ||
     layerFilter === 'programs'
       ? ([] as UserProfile[])
       : schoolFilterOn
-        ? filteredPeople.filter((u) => canPinUser(u, mutualSet))
+        ? filteredPeople.filter((u) => canPinUser(u, friendSet))
         : nearbyUsers
             .filter((u) => u.id !== 'user-me')
-            .filter((u) => canPinUser(u, mutualSet))
+            .filter((u) => canPinUser(u, friendSet))
             .filter((u) => matchesDrawerFilters(u, selectedFilters))
             .slice(0, 40);
 
   // Ensure "me" is always pinned even when outside the current viewport filter.
   const mePin = locatedUsers.find(
-    (u) => u.isCurrentUser && u.locationPrivacy !== 'hidden',
+    (u) =>
+      u.isCurrentUser &&
+      u.locationPrivacy !== 'hidden' &&
+      hasMapCoords(u),
   );
   const mapPeopleRaw =
     mePin && !mapPeopleBase.some((u) => u.id === mePin.id)
@@ -549,6 +601,7 @@ export function computeVisibleMapData(options: {
             (u) =>
               u.id !== 'user-me' &&
               u.locationPrivacy !== 'hidden' &&
+              hasMapCoords(u) &&
               isNearby(u.latitude, u.longitude, centerLat, centerLng, bounds),
           ).length,
       friendsStudyingHere: schoolFilterOn

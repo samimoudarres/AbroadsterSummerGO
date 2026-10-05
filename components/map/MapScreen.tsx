@@ -517,19 +517,18 @@ export function MapScreen({
           setFriendIds(ids);
           setMutualFriendIds(mutualIds);
           const friendSet = new Set(ids);
-          const mutualSet = new Set(mutualIds);
           const { chatProfileToMapUser } = await import(
             '../../lib/map/chatProfileToMapUser'
           );
 
-          // Full roster for "students nearby"; always include me as a profile pin
+          // Full roster for "students nearby"; friends = people YOU added
           let roster: UserProfile[] = [];
           try {
             const profiles = await chatRepo.listProfiles();
             roster = profiles
               .map((p) =>
                 chatProfileToMapUser(p, {
-                  isFriend: mutualSet.has(p.id) || p.id === me.id,
+                  isFriend: friendSet.has(p.id) || p.id === me.id,
                   isCurrentUser: p.id === me.id,
                 }),
               )
@@ -790,10 +789,7 @@ export function MapScreen({
       try {
         const me = await chatRepo.getMe();
         const ids = friendIds ?? (await chatRepo.getFriendIds());
-        const mutual =
-          mutualFriendIds ?? (await chatRepo.getMutualFriendIds());
         const friendSet = new Set(ids);
-        const mutualSet = new Set(mutual);
         const { profiles, total } = await chatRepo.listStudentsAtSchool({
           kind: chip.type,
           label: chip.label,
@@ -818,7 +814,7 @@ export function MapScreen({
 
           const isMe = p.id === me.id;
           let pin = chatProfileToMapUser(p, {
-            isFriend: mutualSet.has(p.id) || isMe,
+            isFriend: friendSet.has(p.id) || isMe,
             isCurrentUser: isMe,
             ...(isMe && gps
               ? { liveLat: gps.latitude, liveLng: gps.longitude }

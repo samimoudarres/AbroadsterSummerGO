@@ -1312,8 +1312,8 @@ export const chatRepo = {
         if (!seen.has(t.id)) out.push(t);
       }
     }
-    // Defense in depth if older list_trips_feed is still deployed
-    const friendIds = new Set(await this.getMutualFriendIds());
+    // Defense in depth: show trips for people YOU friended (directed).
+    const friendIds = new Set(await this.getFriendIds());
     out = out.filter((t) => {
       if (isTripParticipant(t, me.id)) return true;
       if (getTripDisplayStatus(t) === 'past') return true;
