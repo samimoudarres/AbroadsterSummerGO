@@ -2722,11 +2722,14 @@ export const demoChat = {
     }
     if (input.notifyFriends) {
       const invited = new Set(input.inviteeIds);
-      for (const friendId of state().friendships[DEMO_ME_ID] ?? []) {
-        if (invited.has(friendId)) continue;
+      // Notify people who friended ME (matches live create_trip)
+      for (const [userId, friendIds] of Object.entries(state().friendships)) {
+        if (userId === DEMO_ME_ID) continue;
+        if (!(friendIds ?? []).includes(DEMO_ME_ID)) continue;
+        if (invited.has(userId)) continue;
         state().notifications.push({
           id: id('notif'),
-          userId: friendId,
+          userId,
           kind: 'trip_created',
           title: 'New trip',
           body: `${me.fullName} is planning a trip to ${trip.destinationCity}`,

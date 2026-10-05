@@ -48,8 +48,9 @@ interface NotificationsScreenProps {
   onNavigate: (nav: NotificationNav) => void;
 }
 
-/** Collapsed preview size per group (Instagram-style). */
-const PREVIEW_COUNT = 3;
+/** Collapsed preview size per group (Instagram-style). Show a generous
+ *  history window so friend adds / trips aren't buried behind "see more". */
+const PREVIEW_COUNT = 25;
 const SUGGESTED_PREVIEW = 5;
 
 type GroupDef = {
@@ -60,6 +61,11 @@ type GroupDef = {
 
 const GROUPS: GroupDef[] = [
   {
+    id: 'friends',
+    title: 'Friends',
+    kinds: ['friend_added', 'friend_nearby'],
+  },
+  {
     id: 'messages',
     title: 'Messages',
     kinds: ['dm_message', 'channel_message'],
@@ -67,11 +73,6 @@ const GROUPS: GroupDef[] = [
   { id: 'stamps', title: 'Stamps', kinds: ['post_stamped'] },
   { id: 'comments', title: 'Comments', kinds: ['post_commented'] },
   { id: 'tagged', title: 'Tagged', kinds: ['post_tagged'] },
-  {
-    id: 'friends',
-    title: 'Friends',
-    kinds: ['friend_added', 'friend_nearby'],
-  },
   {
     id: 'welcome',
     title: 'Getting started',

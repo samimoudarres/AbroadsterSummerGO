@@ -39,6 +39,8 @@ export interface ChatProfile {
   dateOfBirth?: string | null;
   /** Map pin privacy: exact GPS, city-area only, or hidden. */
   locationPrivacy?: 'exact' | 'city' | 'hidden' | null;
+  /** Profile creation time (for suggested-accounts recency). */
+  createdAt?: string | null;
 }
 
 export interface PassportCountryUnlock {

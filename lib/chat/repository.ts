@@ -1573,11 +1573,17 @@ export const chatRepo = {
     const me = await this.getMe();
     // Do NOT seed invite notifications here — that blasted existing users.
     // New accounts get invite_friends via profiles AFTER INSERT trigger only.
-    const { data } = await supabase!
+    // Instagram-style: return full history (cap 500 for payload size).
+    const { data, error } = await supabase!
       .from('notifications')
       .select('*')
       .eq('user_id', me.id)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (error) {
+      console.warn('[notifications] load failed', error.message);
+      return [];
+    }
     // Live session: only real notifications (no seed/demo pollution)
     return (data ?? []).map((n: any) => ({
       id: n.id,
@@ -2130,13 +2136,10 @@ export const chatRepo = {
           };
         },
       );
+      // Show all albums the RPC returns (past + upcoming for self/friends).
+      // Do not strip upcoming trips — they belong on the profile as albums.
       if (!allowDemoSeedMerge()) {
-        const today = new Date().toISOString().slice(0, 10);
-        return live.filter((a) => {
-          const end = (a.dateEnd || a.dateStart || '').slice(0, 10);
-          if (!end) return true;
-          return end <= today;
-        });
+        return live;
       }
       const demo = await demoChat.listAuthorAlbums(userId, limit);
       if (!live.length) return demo;
@@ -2633,22 +2636,66 @@ export const chatRepo = {
     if (!(await useLive())) return demoChat.searchUsers(query);
 
     const me = await this.getMe();
-    const { data } = await supabase!
-      .from('profiles')
-      .select('*')
-      .or(
-        `full_name.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`,
-      )
-      .neq('id', me.id)
-      .limit(30);
-    const liveHits = (data ?? []).map(mapProfile);
     const blockedSet = new Set(await this.listBlockedEitherIds());
+    let liveHits: ReturnType<typeof mapProfile>[] = [];
+
+    // Prefer RPC: tokenized name match, higher limit, block-aware
+    try {
+      const { data, error } = await supabase!.rpc('search_users', {
+        p_query: q,
+        p_limit: 80,
+      });
+      if (!error && Array.isArray(data)) {
+        liveHits = data.map(mapProfile);
+      }
+    } catch {
+      // fall through to client query
+    }
+
+    if (!liveHits.length) {
+      // Escape PostgREST filter special chars so exact names always work
+      const esc = q.replace(/[%_,.()]/g, ' ').replace(/\s+/g, ' ').trim();
+      const tokens = esc.split(/\s+/).filter(Boolean);
+      const orParts = [
+        `full_name.ilike.%${esc}%`,
+        `first_name.ilike.%${esc}%`,
+        `last_name.ilike.%${esc}%`,
+      ];
+      for (const t of tokens) {
+        if (t === esc) continue;
+        orParts.push(`full_name.ilike.%${t}%`);
+        orParts.push(`first_name.ilike.%${t}%`);
+        orParts.push(`last_name.ilike.%${t}%`);
+      }
+      const { data } = await supabase!
+        .from('profiles')
+        .select('*')
+        .or(orParts.join(','))
+        .neq('id', me.id)
+        .limit(80);
+      liveHits = (data ?? []).map(mapProfile);
+
+      // Multi-token: require every token to appear in the combined name
+      if (tokens.length > 1) {
+        liveHits = liveHits.filter((p) => {
+          const hay =
+            `${p.fullName} ${p.firstName} ${p.lastName}`.toLowerCase();
+          return tokens.every((t) => hay.includes(t.toLowerCase()));
+        });
+      }
+    }
+
     const filteredHits = liveHits.filter((p) => !blockedSet.has(p.id));
+    const qLower = q.toLowerCase();
+    filteredHits.sort((a, b) => {
+      const aExact = a.fullName.toLowerCase() === qLower ? 0 : 1;
+      const bExact = b.fullName.toLowerCase() === qLower ? 0 : 1;
+      if (aExact !== bExact) return aExact - bExact;
+      return a.fullName.localeCompare(b.fullName);
+    });
 
     if (!allowDemoSeedMerge()) {
-      return filteredHits.sort((a, b) =>
-        a.fullName.localeCompare(b.fullName),
-      );
+      return filteredHits;
     }
 
     const demoHits = await demoChat.searchUsers(query);
@@ -2660,7 +2707,7 @@ export const chatRepo = {
         seen.add(p.id);
       }
     }
-    return merged.sort((a, b) => a.fullName.localeCompare(b.fullName));
+    return merged;
   },
 
   async listDmThreads(): Promise<DmThread[]> {
@@ -3770,8 +3817,52 @@ export const chatRepo = {
           p_limit: limit,
         });
         if (!error && Array.isArray(data)) {
-          const live: import('../social/suggestAccounts').SuggestedAccount[] =
+          let live: import('../social/suggestAccounts').SuggestedAccount[] =
             data.map(mapRpcRow);
+
+          // Pin newest non-friend first (works even before SQL migration 060)
+          try {
+            const me = await this.getMe();
+            const friendIds = new Set(await this.getFriendIds());
+            const blocked = new Set(await this.listBlockedEitherIds());
+            const { data: recent } = await supabase
+              .from('profiles')
+              .select('*')
+              .neq('id', me.id)
+              .order('created_at', { ascending: false })
+              .limit(20);
+            const newestRow = (recent ?? []).find(
+              (r: any) =>
+                r?.id &&
+                !friendIds.has(r.id) &&
+                !blocked.has(r.id),
+            );
+            if (newestRow?.id) {
+              const mapped = mapRpcRow({
+                user_id: newestRow.id,
+                first_name: newestRow.first_name,
+                last_name: newestRow.last_name,
+                full_name: newestRow.full_name,
+                avatar_url: newestRow.avatar_url,
+                home_university: newestRow.home_university,
+                study_abroad_program: newestRow.study_abroad_program,
+                host_city: newestRow.host_city,
+                host_country: newestRow.host_country,
+                score: 100000,
+                shared_friends: 0,
+                reason: 'New on Abroadster',
+              });
+              mapped.reason = 'New on Abroadster';
+              mapped.score = 100000;
+              live = [
+                mapped,
+                ...live.filter((x) => x.profile.id !== mapped.profile.id),
+              ].slice(0, limit);
+            }
+          } catch {
+            // keep RPC order
+          }
+
           if (live.length >= Math.min(8, limit) || !allowDemoSeedMerge()) {
             return live;
           }
@@ -4243,6 +4334,7 @@ function mapProfile(row: any): ChatProfile {
       row.location_privacy === 'city' || row.location_privacy === 'hidden'
         ? row.location_privacy
         : 'exact',
+    createdAt: row.created_at ?? null,
   };
 }
 

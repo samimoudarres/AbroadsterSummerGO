@@ -35,6 +35,16 @@ export type OnboardingTourStep = {
   primaryLabel: string;
 };
 
+/** Bottom-nav tab index (0–4) highlighted under the tour card. */
+const NAV_TAB_INDEX: Record<OnboardingTourStepId, number | null> = {
+  welcome: null,
+  home: 0,
+  chat: 1,
+  trips: 2,
+  map: 3,
+  profile: 4,
+};
+
 export const ONBOARDING_TOUR_STEPS: OnboardingTourStep[] = [
   {
     id: 'welcome',
@@ -133,7 +143,32 @@ export function OnboardingTourOverlay({
     };
   }, [step, height, width, topPad]);
 
+  const navHighlight = useMemo(() => {
+    const tab = NAV_TAB_INDEX[step.id];
+    if (tab == null) return null;
+    const tabCount = 5;
+    const sidePad = 8;
+    const usable = width - sidePad * 2;
+    const tabW = usable / tabCount;
+    const boxW = Math.min(56, tabW - 4);
+    return {
+      left: sidePad + tab * tabW + (tabW - boxW) / 2,
+      width: boxW,
+      height: 44,
+      bottom: Math.max(10, navClearance - 52),
+    };
+  }, [step.id, width, navClearance]);
+
   if (!visible) return null;
+
+  // Keep label readable: never clip to the narrow spotlight width
+  const labelMaxWidth = Math.min(280, width - 32);
+  const labelLeft = spot
+    ? Math.min(
+        Math.max(16, spot.left + spot.width / 2 - labelMaxWidth / 2),
+        width - labelMaxWidth - 16,
+      )
+    : 16;
 
   return (
     <Modal
@@ -147,21 +182,50 @@ export function OnboardingTourOverlay({
         <View style={styles.dim} />
 
         {spot ? (
+          <>
+            <View
+              style={[
+                styles.spotlight,
+                {
+                  top: spot.top,
+                  left: spot.left,
+                  width: spot.width,
+                  height: spot.height,
+                },
+              ]}
+              pointerEvents="none"
+            >
+              <View style={styles.spotlightRing} />
+            </View>
+            <View
+              style={[
+                styles.spotlightLabelWrap,
+                {
+                  top: spot.top + spot.height + 8,
+                  left: labelLeft,
+                  maxWidth: labelMaxWidth,
+                },
+              ]}
+              pointerEvents="none"
+            >
+              <Text style={styles.spotlightLabel}>{spot.label}</Text>
+            </View>
+          </>
+        ) : null}
+
+        {navHighlight ? (
           <View
             style={[
-              styles.spotlight,
+              styles.navHighlight,
               {
-                top: spot.top,
-                left: spot.left,
-                width: spot.width,
-                height: spot.height,
+                left: navHighlight.left,
+                bottom: navHighlight.bottom,
+                width: navHighlight.width,
+                height: navHighlight.height,
               },
             ]}
             pointerEvents="none"
-          >
-            <View style={styles.spotlightRing} />
-            <Text style={styles.spotlightLabel}>{spot.label}</Text>
-          </View>
+          />
         ) : null}
 
         <View
@@ -225,30 +289,44 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  spotlightLabelWrap: {
+    position: 'absolute',
+    zIndex: 3,
+    alignItems: 'center',
+  },
   spotlightLabel: {
-    marginTop: 8,
-    maxWidth: 200,
     textAlign: 'center',
     fontFamily: fonts.bold,
     fontSize: 13,
+    lineHeight: 18,
     color: colors.white,
     backgroundColor: colors.brandTeal,
-    overflow: 'hidden',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 10,
+    flexShrink: 1,
+  },
+  navHighlight: {
+    position: 'absolute',
+    zIndex: 2,
+    borderWidth: 2,
+    borderColor: colors.brandTeal,
+    borderRadius: 14,
+    backgroundColor: 'rgba(23, 88, 100, 0.18)',
   },
   card: {
     marginHorizontal: 16,
     backgroundColor: colors.white,
     borderRadius: 18,
-    padding: 18,
-    zIndex: 3,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 18,
+    zIndex: 4,
     shadowColor: '#000',
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.12,
     shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   cardTop: {
     flexDirection: 'row',
@@ -258,17 +336,16 @@ const styles = StyleSheet.create({
   },
   progress: {
     fontFamily: fonts.bold,
-    fontSize: 12,
+    fontSize: 13,
     color: colors.textMuted,
-    letterSpacing: 0.4,
   },
   skipBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
   skipText: {
-    fontFamily: fonts.bold,
+    fontFamily: fonts.regular,
     fontSize: 14,
     color: colors.textMuted,
   },
@@ -282,20 +359,21 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 15,
     lineHeight: 22,
-    color: colors.black,
-    marginBottom: 16,
+    color: colors.textMuted,
+    marginBottom: 12,
   },
   hint: {
-    fontFamily: fonts.regular,
+    fontFamily: fonts.bold,
     fontSize: 13,
-    color: colors.textMuted,
+    color: colors.brandTeal,
     marginBottom: 12,
   },
   primary: {
     backgroundColor: colors.brandTeal,
-    borderRadius: 999,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+    marginTop: 4,
   },
   primaryText: {
     fontFamily: fonts.bold,

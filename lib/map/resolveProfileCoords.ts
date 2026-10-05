@@ -170,7 +170,17 @@ export function resolveProfileMapCoords(
     };
   }
 
-  return base;
+  if (base) return base;
+
+  // Always resolvable so search / profile open never drops a real user.
+  // Soft Europe fallback with deterministic scatter (not shown as "live").
+  const fallback = scatterAround(48.2, 10.5, p.id, 180);
+  return {
+    latitude: fallback.latitude,
+    longitude: fallback.longitude,
+    locationLabel: cityLabel || 'Abroad',
+    source: 'fallback',
+  };
 }
 
 /** Best-effort coords to persist on profiles.host_latitude/longitude. */

@@ -675,15 +675,26 @@ export function MapScreen({
             chatProfileToMapUser(hit, {
               isFriend: (mutualFriendIds ?? friendIds ?? []).includes(hit.id),
             });
-          if (!local) continue;
-          const located = resolveMapLocation(local);
-          if (!located) continue;
-          seen.add(local.id);
+          // Always include search hits so every real user is findable.
+          // Prefer resolved map coords; fall back to a soft Europe pin.
+          let pin = local;
+          if (!pin) {
+            pin = chatProfileToMapUser(
+              { ...hit, locationPrivacy: 'city' },
+              {
+                isFriend: (mutualFriendIds ?? friendIds ?? []).includes(hit.id),
+              },
+            );
+          }
+          if (!pin) continue;
+          const located = resolveMapLocation(pin);
+          seen.add(pin.id);
           mapVisible.push({
-            ...local,
-            latitude: located.latitude,
-            longitude: located.longitude,
-            locationLabel: located.locationLabel,
+            ...pin,
+            latitude: located?.latitude ?? pin.latitude,
+            longitude: located?.longitude ?? pin.longitude,
+            locationLabel:
+              located?.locationLabel || pin.locationLabel || pin.hostCity || 'Abroad',
           });
         }
         setRemotePeople(mapVisible);

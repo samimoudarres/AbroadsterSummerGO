@@ -166,7 +166,14 @@ export function resolveMapLocation(
     };
   }
 
-  return null;
+  // Soft fallback so search never drops a real profile
+  const fallback = scatterAround(48.2, 10.5, user.id, 180);
+  return {
+    latitude: fallback.latitude,
+    longitude: fallback.longitude,
+    locationLabel: user.locationLabel || user.hostCity || 'Abroad',
+    source: 'city',
+  };
 }
 
 export type LocationPrivacySetting = LocationPrivacy;

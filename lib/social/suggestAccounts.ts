@@ -144,5 +144,27 @@ export function scoreSuggestedAccounts(opts: {
     if (b.score !== a.score) return b.score - a.score;
     return (a.profile.fullName || '').localeCompare(b.profile.fullName || '');
   });
+
+  // Pin the most recently created non-friend first (matches SQL suggest_accounts)
+  let newest: SuggestedAccount | null = null;
+  let newestAt = -Infinity;
+  for (const s of scored) {
+    const raw = s.profile.createdAt;
+    const t = raw ? Date.parse(raw) : NaN;
+    if (Number.isFinite(t) && t > newestAt) {
+      newestAt = t;
+      newest = s;
+    }
+  }
+  if (newest) {
+    newest = {
+      ...newest,
+      score: Math.max(newest.score, 100000),
+      reason: 'New on Abroadster',
+    };
+    const rest = scored.filter((s) => s.profile.id !== newest!.profile.id);
+    return [newest, ...rest].slice(0, limit);
+  }
+
   return scored.slice(0, limit);
 }
