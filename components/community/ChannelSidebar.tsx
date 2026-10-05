@@ -314,7 +314,14 @@ export function ChannelSidebar({
                   onPress={() => onOpenDm(u.id)}
                 >
                   <Avatar source={u.avatar} name={u.fullName} size={36} />
-                  <Text style={styles.dmName}>{u.fullName}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.dmName} numberOfLines={1}>
+                      {u.fullName}
+                    </Text>
+                    <Text style={styles.dmPreview} numberOfLines={1}>
+                      Tap to message
+                    </Text>
+                  </View>
                 </Pressable>
               ))
             : loadingInbox && threads.length === 0
@@ -330,9 +337,22 @@ export function ChannelSidebar({
                   </Text>
                 )
               : threads.map((t) => {
-                const u = profiles[t.otherUserId] ?? t.otherProfile;
-                if (!u) return null;
+                const u =
+                  profiles[t.otherUserId] ??
+                  t.otherProfile ?? {
+                    id: t.otherUserId,
+                    firstName: '',
+                    lastName: '',
+                    fullName: 'Traveler',
+                    avatar: '',
+                    homeUniversity: '',
+                    studyAbroadProgram: '',
+                    homeAccent: '#175864',
+                    abroadAccent: '#E8A838',
+                  };
                 const unread = (t.unreadCount ?? 0) > 0;
+                const preview =
+                  (t.lastPreview || '').trim() || 'Tap to open conversation';
                 return (
                   <Pressable
                     key={t.id}
@@ -340,7 +360,11 @@ export function ChannelSidebar({
                     onPress={() => onOpenDm(u.id)}
                   >
                     <View>
-                      <Avatar source={u.avatar} name={u.fullName} size={36} />
+                      <Avatar
+                        source={u.avatar}
+                        name={u.fullName}
+                        size={36}
+                      />
                       {unread ? <View style={styles.dmUnreadDot} /> : null}
                     </View>
                     <View style={{ flex: 1 }}>
@@ -348,19 +372,17 @@ export function ChannelSidebar({
                         style={[styles.dmName, unread && styles.dmNameUnread]}
                         numberOfLines={1}
                       >
-                        {u.fullName}
+                        {u.fullName || 'Traveler'}
                       </Text>
-                      {t.lastPreview ? (
-                        <Text
-                          style={[
-                            styles.dmPreview,
-                            unread && styles.dmPreviewUnread,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {t.lastPreview}
-                        </Text>
-                      ) : null}
+                      <Text
+                        style={[
+                          styles.dmPreview,
+                          unread && styles.dmPreviewUnread,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {preview}
+                      </Text>
                     </View>
                     {unread ? (
                       <View style={styles.dmUnreadCount}>

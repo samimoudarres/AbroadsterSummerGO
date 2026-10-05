@@ -2713,61 +2713,78 @@ export const chatRepo = {
   async listDmThreads(): Promise<DmThread[]> {
     if (!(await useLive())) return demoChat.listDmThreads();
 
+    const mapInboxRow = (row: any): DmThread | null => {
+      const otherUserId = String(row.other_user_id ?? row.otherUserId ?? '');
+      if (!otherUserId) return null;
+      const fullName =
+        (row.other_full_name as string)?.trim() ||
+        [row.other_first_name, row.other_last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim() ||
+        'Traveler';
+      const otherProfile: ChatProfile = {
+        id: otherUserId,
+        firstName: row.other_first_name ?? '',
+        lastName: row.other_last_name ?? '',
+        fullName,
+        avatar: row.other_avatar || defaultAvatarUrl(fullName),
+        homeUniversity: row.other_home_university ?? '',
+        studyAbroadProgram: row.other_study_abroad ?? '',
+        homeAccent: '#175864',
+        abroadAccent: '#E8A838',
+      };
+      return {
+        id: String(row.id),
+        otherUserId,
+        updatedAt: row.updated_at ?? new Date().toISOString(),
+        lastPreview: row.last_preview ?? row.lastPreview ?? '',
+        unreadCount: Number(row.unread_count ?? row.unreadCount ?? 0),
+        otherProfile,
+      };
+    };
+
     // Fast path: single RPC with preview + unread + other profile
     try {
       const { data, error } = await supabase!.rpc('list_dm_inbox');
-      if (!error && Array.isArray(data)) {
-        const blocked = new Set(await this.listBlockedEitherIds());
-        const live: DmThread[] = data
-          .map((row: any) => {
-            const otherUserId = String(row.other_user_id ?? '');
-            if (!otherUserId) return null;
-            const fullName =
-              (row.other_full_name as string)?.trim() ||
-              [row.other_first_name, row.other_last_name]
-                .filter(Boolean)
-                .join(' ')
-                .trim() ||
-              'Traveler';
-            const otherProfile: ChatProfile = {
-              id: otherUserId,
-              firstName: row.other_first_name ?? '',
-              lastName: row.other_last_name ?? '',
-              fullName,
-              avatar: row.other_avatar || defaultAvatarUrl(fullName),
-              homeUniversity: row.other_home_university ?? '',
-              studyAbroadProgram: row.other_study_abroad ?? '',
-              homeAccent: '#175864',
-              abroadAccent: '#E8A838',
-            };
-            return {
-              id: String(row.id),
-              otherUserId,
-              updatedAt: row.updated_at ?? new Date().toISOString(),
-              lastPreview: row.last_preview ?? '',
-              unreadCount: Number(row.unread_count ?? 0),
-              otherProfile,
-            } satisfies DmThread;
-          })
-          .filter(Boolean) as DmThread[];
-        const visible = live.filter((t) => !blocked.has(t.otherUserId));
-        if (!allowDemoSeedMerge()) {
-          return visible.sort(
+      if (!error && data != null) {
+        const rows = Array.isArray(data)
+          ? data
+          : Array.isArray((data as any)?.data)
+            ? (data as any).data
+            : typeof data === 'object' && !Array.isArray(data)
+              ? Object.values(data as Record<string, unknown>).flatMap((v) =>
+                  Array.isArray(v) ? v : [],
+                )
+              : [];
+        if (Array.isArray(rows)) {
+          const blocked = new Set(await this.listBlockedEitherIds());
+          const live = rows
+            .map(mapInboxRow)
+            .filter(Boolean)
+            .filter((t) => !blocked.has(t!.otherUserId)) as DmThread[];
+          if (live.length > 0 || !allowDemoSeedMerge()) {
+            return live.sort(
+              (a, b) =>
+                new Date(b.updatedAt).getTime() -
+                new Date(a.updatedAt).getTime(),
+            );
+          }
+          const demoThreads = (await demoChat.listDmThreads()).filter(
+            (t) => !blocked.has(t.otherUserId),
+          );
+          const seen = new Set(live.map((t) => t.id));
+          return [
+            ...live,
+            ...demoThreads.filter((t) => !seen.has(t.id)),
+          ].sort(
             (a, b) =>
               new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
           );
         }
-        const demoThreads = (await demoChat.listDmThreads()).filter(
-          (t) => !blocked.has(t.otherUserId),
-        );
-        const seen = new Set(visible.map((t) => t.id));
-        return [...visible, ...demoThreads.filter((t) => !seen.has(t.id))].sort(
-          (a, b) =>
-            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-        );
       }
     } catch {
-      // fall through to legacy path until migration 056
+      // fall through to legacy path until migration applied
     }
 
     const me = await this.getMe();
@@ -2847,6 +2864,7 @@ export const chatRepo = {
                 ? 'Shared a trip'
                 : 'Message');
       }
+      const otherProfile = await this.getProfile(otherUserId);
       liveThreads.push({
         id: threadId,
         otherUserId,
@@ -2856,6 +2874,17 @@ export const chatRepo = {
           new Date().toISOString(),
         lastPreview: lastPreview.slice(0, 120),
         unreadCount: unreadByThread.get(threadId) ?? 0,
+        otherProfile: otherProfile ?? {
+          id: otherUserId,
+          firstName: '',
+          lastName: '',
+          fullName: 'Traveler',
+          avatar: defaultAvatarUrl('Traveler'),
+          homeUniversity: '',
+          studyAbroadProgram: '',
+          homeAccent: '#175864',
+          abroadAccent: '#E8A838',
+        },
       });
     }
     const blocked = new Set(await this.listBlockedEitherIds());

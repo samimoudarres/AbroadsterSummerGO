@@ -710,11 +710,7 @@ export function CommunityScreen({
           <Pressable style={styles.chatBtn} onPress={() => setSidebarOpen(true)}>
             <Ionicons name="chatbubbles" size={22} color={colors.black} />
             {dmUnreadTotal > 0 ? (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadBadgeText}>
-                  {dmUnreadTotal > 99 ? '99+' : String(dmUnreadTotal)}
-                </Text>
-              </View>
+              <View style={styles.unreadDot} accessibilityLabel="New messages" />
             ) : null}
           </Pressable>
           <View style={styles.pillsTrack}>
@@ -1344,6 +1340,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8E8E8',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+    overflow: 'visible',
+  },
+  unreadDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#E53935',
+    borderWidth: 1.5,
+    borderColor: '#E8E8E8',
   },
   unreadBadge: {
     position: 'absolute',
