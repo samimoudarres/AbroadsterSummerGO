@@ -517,9 +517,9 @@ export function NotificationsScreen({
         data={rows}
         keyExtractor={(row) => row.key}
         contentContainerStyle={{ paddingBottom: 40 }}
-        ListFooterComponent={
+        ListHeaderComponent={
           suggested.length > 0 ? (
-            <View style={[styles.suggestedBlock, { borderBottomWidth: 0, borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8 }]}>
+            <View style={styles.suggestedBlock}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Suggested accounts</Text>
               </View>
@@ -589,9 +589,11 @@ export function NotificationsScreen({
           ) : null
         }
         ListEmptyComponent={
-          <Text style={styles.empty}>
-            You’re all caught up — friend activity will show up here.
-          </Text>
+          suggested.length > 0 ? null : (
+            <Text style={styles.empty}>
+              You’re all caught up — friend activity will show up here.
+            </Text>
+          )
         }
         renderItem={({ item: row }) => {
           if (row.type === 'header') {
