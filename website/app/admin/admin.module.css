@@ -123,6 +123,15 @@
   white-space: nowrap;
 }
 
+.retentionCurve {
+  display: grid;
+  grid-template-columns: repeat(31, minmax(0, 1fr));
+  gap: 0.2rem;
+  align-items: end;
+  min-height: 120px;
+  margin-bottom: 1rem;
+}
+
 .toggle {
   display: flex;
   gap: 0.4rem;
