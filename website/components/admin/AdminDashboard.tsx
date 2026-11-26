@@ -261,7 +261,7 @@ export function AdminDashboard() {
             <StatCard
               label="Active (30d)"
               value={stats.activity.active30d}
-              hint="distinct users with ≥1 open"
+              hint="distinct users active in the app"
             />
             <StatCard
               label="App opens (30d)"
@@ -330,7 +330,7 @@ export function AdminDashboard() {
                 <h2 className={styles.panelTitle}>Active users · last 30 days</h2>
                 <p className={styles.subtitle}>
                   {stats.activity.trackingEnabled
-                    ? `${formatNumber(stats.activity.active30d)} users opened the app in the last 30 days · ${formatNumber(stats.activity.opens30d)} total opens${peakActivity ? ` · peak ${formatDay(peakActivity.date)} with ${formatNumber(peakActivity.value)} ${peakActivity.label}` : ''}`
+                    ? `${formatNumber(stats.activity.active30d)} users were active in the last 30 days · ${formatNumber(stats.activity.opens30d)} app opens logged${peakActivity ? ` · peak ${formatDay(peakActivity.date)} with ${formatNumber(peakActivity.value)} ${peakActivity.label}` : ''}`
                     : 'App-open tracking is not available yet — no activity data in Supabase.'}
                 </p>
               </div>
@@ -390,7 +390,7 @@ export function AdminDashboard() {
                 <h2 className={styles.panelTitle}>User retention · weekly cohorts</h2>
                 <p className={styles.subtitle}>
                   {stats.retention.trackingEnabled
-                    ? `Share of each signup week still opening the app N days after joining. Cohorts start Oct 1, 2026.${stats.retention.trackingStart ? ` Days before ${formatDay(stats.retention.trackingStart)} were never recorded (tracking began then) and show —, as do days a cohort has not reached yet.` : ''}`
+                    ? `Share of each signup week still active in the app N days after joining. Cohorts start Oct 1, 2026.${stats.retention.trackingStart ? ` Days before ${formatDay(stats.retention.trackingStart)} were never recorded (tracking began then) and show —, as do days a cohort has not reached yet.` : ''}`
                     : 'Retention tracking is not available yet — no app-open data in Supabase.'}
                 </p>
               </div>
@@ -542,7 +542,7 @@ export function AdminDashboard() {
                     <th>Posts</th>
                     <th>Stamps</th>
                     <th>Messages</th>
-                    <th>Opens (7d)</th>
+                    <th>Active days (7d)</th>
                     <th>Last active</th>
                     <th>Push</th>
                   </tr>
@@ -568,7 +568,7 @@ export function AdminDashboard() {
                       <td>{row.posts}</td>
                       <td>{row.stampsGiven}</td>
                       <td>{row.messages}</td>
-                      <td>{row.appOpens7d}</td>
+                      <td>{row.activeDays7d}</td>
                       <td>{formatWhen(row.lastActiveAt || row.lastSignInAt)}</td>
                       <td>{row.hasPush ? 'Yes' : '—'}</td>
                     </tr>

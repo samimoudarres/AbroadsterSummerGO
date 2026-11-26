@@ -37,13 +37,17 @@ function SparkBars({
   color?: 'teal' | 'amber' | 'ink';
 }) {
   const max = Math.max(1, ...series.map((s) => s.count));
+  // Pixel heights, not percentages: percentage heights never resolve
+  // inside these grid wrappers, so every bar rendered at the min-height
+  // and the sparkline looked flat.
+  const SPARK_BAR_MAX_PX = 48;
   return (
     <div className={styles.spark}>
       {series.map((point) => (
         <div
           key={point.date}
           className={`${styles.sparkBar} ${styles[`spark_${color}`]}`}
-          style={{ height: `${(point.count / max) * 100}%` }}
+          style={{ height: `${Math.round((point.count / max) * SPARK_BAR_MAX_PX)}px` }}
           title={`${point.date}: ${point.count}`}
         />
       ))}
@@ -161,15 +165,15 @@ export function UserActivityPanel({
             <h3 className={styles.sectionTitle}>Engagement windows</h3>
             <section className={styles.miniGrid}>
               <MiniStat
-                label="App opens today"
-                value={detail.windows.appOpensToday}
+                label="Active days today"
+                value={detail.windows.activeDaysToday}
               />
               <MiniStat
-                label="App opens (7d)"
-                value={detail.windows.appOpens7d}
-                hint={`avg ${detail.windows.avgAppOpensPerDay7d}/day`}
+                label="Active days (7d)"
+                value={detail.windows.activeDays7d}
+                hint={`avg ${detail.windows.avgActiveDaysPerDay7d}/day`}
               />
-              <MiniStat label="App opens (30d)" value={detail.windows.appOpens30d} />
+              <MiniStat label="Active days (30d)" value={detail.windows.activeDays30d} />
               <MiniStat
                 label="Posts (7d / 30d)"
                 value={`${detail.windows.posts7d} / ${detail.windows.posts30d}`}
@@ -219,8 +223,8 @@ export function UserActivityPanel({
 
             <h3 className={styles.sectionTitle}>Last 30 days</h3>
             <div className={styles.sparkBlock}>
-              <p className={styles.rankHeading}>App opens</p>
-              <SparkBars series={detail.series.appOpensByDay} color="teal" />
+              <p className={styles.rankHeading}>Active days</p>
+              <SparkBars series={detail.series.activeDaysByDay} color="teal" />
             </div>
             <div className={styles.sparkBlock}>
               <p className={styles.rankHeading}>Posts</p>
