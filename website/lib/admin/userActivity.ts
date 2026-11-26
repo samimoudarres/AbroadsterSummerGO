@@ -152,6 +152,40 @@ function countDistinctDays(
   return days.size;
 }
 
+/**
+ * Fetch every row matching an .in() filter. PostgREST caps one select at
+ * 1,000 rows, so a single unpaged select silently drops rows — that is
+ * how the newest users showed 0 active days in the roster while their
+ * per-user drawer (a small, unpaged query) found their activity.
+ */
+async function fetchAllIn(
+  table: string,
+  select: string,
+  column: string,
+  ids: string[],
+  sinceIso?: string,
+): Promise<{ [key: string]: string }[]> {
+  const admin = getSupabaseAdmin();
+  const rows: { [key: string]: string }[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    let q = admin
+      .from(table)
+      .select(select)
+      .in(column, ids)
+      .order('created_at', { ascending: true });
+    if (sinceIso) q = q.gte('created_at', sinceIso);
+    const { data, error } = await q.range(from, from + pageSize - 1);
+    if (error) {
+      if (isMissingRelation(error)) return [];
+      throw error;
+    }
+    rows.push(...((data ?? []) as unknown as { [key: string]: string }[]));
+    if ((data ?? []).length < pageSize) break;
+  }
+  return rows;
+}
+
 function isMissingRelation(error: { code?: string; message?: string } | null) {
   if (!error) return false;
   return (
@@ -266,34 +300,34 @@ export async function fetchUsersActivityList(): Promise<UserListRow[]> {
     await Promise.all([
       admin.from('posts').select('author_id').in('author_id', ids),
       admin.from('post_stamps').select('user_id').in('user_id', ids),
-      admin.from('messages').select('sender_id').in('sender_id', ids),
+      // Paged: message counts are unbounded and a single select caps
+      // at 1,000 rows.
+      fetchAllIn('messages', 'sender_id, created_at', 'sender_id', ids),
       admin.from('user_push_tokens').select('user_id').in('user_id', ids),
       hasActivity
-        ? admin
-            .from('user_activity_events')
-            .select('user_id, created_at')
-            .gte('created_at', since7d)
-            .in('user_id', ids)
-        : Promise.resolve({
-            data: [] as { user_id: string; created_at: string }[],
-            error: null,
-          }),
+        ? fetchAllIn(
+            'user_activity_events',
+            'user_id, created_at',
+            'user_id',
+            ids,
+            since7d,
+          )
+        : Promise.resolve(
+            [] as { user_id: string; created_at: string }[],
+          ),
       admin.auth.admin.listUsers({ page: 1, perPage: 200 }),
     ]);
 
   if (posts.error) throw posts.error;
   if (stamps.error) throw stamps.error;
-  if (messages.error) throw messages.error;
+  // Paged fetches never fail the whole roster on a missing table.
+  const messageRows = messages as unknown as { sender_id: string }[];
   if (pushTokens.error) throw pushTokens.error;
   // Activity table is optional — never fail the whole roster on it.
-  const activityRowsData = isMissingRelation(activityRows.error)
-    ? []
-    : activityRows.error
-      ? []
-      : ((activityRows.data ?? []) as {
-          user_id: string;
-          created_at: string;
-        }[]);
+  const activityRowsData = activityRows as unknown as {
+    user_id: string;
+    created_at: string;
+  }[];
 
   const postCounts = countMap(
     (posts.data ?? []) as Record<string, string>[],
@@ -304,7 +338,7 @@ export async function fetchUsersActivityList(): Promise<UserListRow[]> {
     'user_id',
   );
   const messageCounts = countMap(
-    (messages.data ?? []) as Record<string, string>[],
+    messageRows as Record<string, string>[],
     'sender_id',
   );
   // Active days in the last 7d (any recorded activity): app_open alone
