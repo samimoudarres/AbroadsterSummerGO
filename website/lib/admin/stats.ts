@@ -36,6 +36,7 @@ export type ActivityStats = {
   opens7d: number;
   opens30d: number;
   peakDay: { date: string; activeUsers: number } | null;
+  peakOpensDay: { date: string; opens: number } | null;
   trackingEnabled: boolean;
 };
 
@@ -203,6 +204,7 @@ function emptyActivityStats(): ActivityStats {
     opens7d: 0,
     opens30d: 0,
     peakDay: null,
+    peakOpensDay: null,
     trackingEnabled: false,
   };
 }
@@ -226,8 +228,10 @@ function isMissingActivityTable(error: { code?: string; message?: string } | nul
 async function fetchActivityStats(): Promise<ActivityStats> {
   try {
     const admin = getSupabaseAdmin();
-    const since30d = isoDaysAgo(30);
-    const since7d = isoDaysAgo(7);
+    // Calendar-day windows (29/6 days back from today at 00:00 UTC) so the
+    // totals match the 30-day chart day for day.
+    const since30d = isoDaysAgo(29);
+    const since7d = isoDaysAgo(6);
     const sinceToday = isoDaysAgo(0);
     const liveSince = new Date(Date.now() - 15 * 60 * 1000).toISOString();
 
@@ -283,6 +287,14 @@ async function fetchActivityStats(): Promise<ActivityStats> {
     }
     if (peakDay && peakDay.activeUsers === 0) peakDay = null;
 
+    let peakOpensDay: { date: string; opens: number } | null = null;
+    for (const point of byDay) {
+      if (!peakOpensDay || point.opens > peakOpensDay.opens) {
+        peakOpensDay = { date: point.date, opens: point.opens };
+      }
+    }
+    if (peakOpensDay && peakOpensDay.opens === 0) peakOpensDay = null;
+
     return {
       byDay,
       liveNow,
@@ -293,6 +305,7 @@ async function fetchActivityStats(): Promise<ActivityStats> {
       opens7d,
       opens30d: rows.length,
       peakDay,
+      peakOpensDay,
       trackingEnabled: true,
     };
   } catch {
@@ -302,8 +315,10 @@ async function fetchActivityStats(): Promise<ActivityStats> {
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
   const admin = getSupabaseAdmin();
-  const since30d = isoDaysAgo(30);
-  const since7d = isoDaysAgo(7);
+  // Calendar-day windows so the card totals match the 30-day chart exactly
+  // (30 calendar days ending today, 7 calendar days ending today).
+  const since30d = isoDaysAgo(29);
+  const since7d = isoDaysAgo(6);
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const [
