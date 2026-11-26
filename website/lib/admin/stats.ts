@@ -40,6 +40,36 @@ export type ActivityStats = {
   trackingEnabled: boolean;
 };
 
+export type RetentionCell = {
+  day: number;
+  retained: number;
+  eligible: number;
+  pct: number | null;
+};
+
+export type RetentionCohort = {
+  cohortStart: string;
+  size: number;
+  cells: RetentionCell[];
+};
+
+export type RetentionCurvePoint = {
+  day: number;
+  retained: number;
+  eligible: number;
+  pct: number | null;
+};
+
+export type RetentionStats = {
+  trackingEnabled: boolean;
+  trackingStart: string | null;
+  cohorts: RetentionCohort[];
+  day1: RetentionCell;
+  day7: RetentionCell;
+  day30: RetentionCell;
+  curve: RetentionCurvePoint[];
+};
+
 export type DashboardStats = {
   generatedAt: string;
   users: {
@@ -53,6 +83,7 @@ export type DashboardStats = {
     topPrograms: RankedRow[];
   };
   activity: ActivityStats;
+  retention: RetentionStats;
   engagement: {
     trips: number;
     tripsUpcoming: number;
@@ -313,6 +344,174 @@ async function fetchActivityStats(): Promise<ActivityStats> {
   }
 }
 
+function emptyRetentionStats(): RetentionStats {
+  const emptyCell = (day: number): RetentionCell => ({
+    day,
+    retained: 0,
+    eligible: 0,
+    pct: null,
+  });
+  return {
+    trackingEnabled: false,
+    trackingStart: null,
+    cohorts: [],
+    day1: emptyCell(1),
+    day7: emptyCell(7),
+    day30: emptyCell(30),
+    curve: Array.from({ length: 31 }, (_, day) => ({
+      day,
+      retained: 0,
+      eligible: 0,
+      pct: null,
+    })),
+  };
+}
+
+function parseDayKey(key: string) {
+  const [y, m, d] = key.split('-').map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+function daysBetween(fromKey: string, toKey: string) {
+  return Math.round(
+    (parseDayKey(toKey) - parseDayKey(fromKey)) / (24 * 60 * 60 * 1000),
+  );
+}
+
+function addDaysToKey(key: string, days: number) {
+  const d = new Date(parseDayKey(key) + days * 24 * 60 * 60 * 1000);
+  return dayKey(d.toISOString());
+}
+
+function mondayKey(key: string) {
+  const ms = parseDayKey(key);
+  const dayOfWeek = new Date(ms).getUTCDay();
+  const back = (dayOfWeek + 6) % 7;
+  return addDaysToKey(key, -back);
+}
+
+const RETENTION_COHORT_DAYS = [0, 1, 3, 7, 14, 30];
+
+/**
+ * Cohort retention — the standard way consumer apps track it. Rows are
+ * weekly signup cohorts (Monday-start, UTC); each cell is the share of
+ * that cohort who opened the app N days after signing up. A user only
+ * counts as eligible for day N once N days have passed since their own
+ * signup, so recent cohorts show "—" for days they have not reached yet.
+ * Only users who signed up on/after app-open tracking began are counted:
+ * earlier signups have no recorded opens for their first days, so their
+ * retention would read as 0% for the wrong reason. Never throws.
+ */
+async function fetchRetentionStats(): Promise<RetentionStats> {
+  try {
+    const admin = getSupabaseAdmin();
+    const today = dayKey(new Date().toISOString());
+    const sinceUsers = isoDaysAgo(84);
+    const sinceEvents = isoDaysAgo(120);
+    const pageSize = 1000;
+
+    const profiles: { id: string; created_at: string }[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await admin
+        .from('profiles')
+        .select('id, created_at')
+        .gte('created_at', sinceUsers)
+        .order('created_at', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      profiles.push(...(data ?? []));
+      if ((data ?? []).length < pageSize) break;
+    }
+
+    const events: { user_id: string; created_at: string }[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await admin
+        .from('user_activity_events')
+        .select('user_id, created_at')
+        .eq('kind', 'app_open')
+        .gte('created_at', sinceEvents)
+        .order('created_at', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) {
+        if (isMissingActivityTable(error)) return emptyRetentionStats();
+        throw error;
+      }
+      events.push(...(data ?? []));
+      if ((data ?? []).length < pageSize) break;
+    }
+
+    if (events.length === 0) return emptyRetentionStats();
+    const trackingStart = dayKey(events[0].created_at);
+
+    const activeDays = new Map<string, Set<string>>();
+    for (const event of events) {
+      const days = activeDays.get(event.user_id) ?? new Set<string>();
+      days.add(dayKey(event.created_at));
+      activeDays.set(event.user_id, days);
+    }
+
+    const users = profiles
+      .map((p) => ({ id: p.id, signupDay: dayKey(p.created_at) }))
+      .filter((u) => u.signupDay >= trackingStart);
+    if (users.length === 0) {
+      return { ...emptyRetentionStats(), trackingEnabled: true, trackingStart };
+    }
+
+    const cellFor = (members: { id: string; signupDay: string }[], day: number): RetentionCell => {
+      let eligible = 0;
+      let retained = 0;
+      for (const user of members) {
+        if (daysBetween(user.signupDay, today) < day) continue;
+        eligible += 1;
+        if (activeDays.get(user.id)?.has(addDaysToKey(user.signupDay, day))) {
+          retained += 1;
+        }
+      }
+      return {
+        day,
+        retained,
+        eligible,
+        pct: eligible > 0 ? Math.round((retained / eligible) * 100) : null,
+      };
+    };
+
+    const byCohort = new Map<string, { id: string; signupDay: string }[]>();
+    for (const user of users) {
+      const key = mondayKey(user.signupDay);
+      const members = byCohort.get(key) ?? [];
+      members.push(user);
+      byCohort.set(key, members);
+    }
+    const cohorts: RetentionCohort[] = Array.from(byCohort.entries())
+      .map(([cohortStart, members]) => ({
+        cohortStart,
+        size: members.length,
+        cells: RETENTION_COHORT_DAYS.map((day) => cellFor(members, day)),
+      }))
+      .sort((a, b) => (a.cohortStart < b.cohortStart ? 1 : -1));
+
+    const curve: RetentionCurvePoint[] = Array.from(
+      { length: 31 },
+      (_, day) => {
+        const cell = cellFor(users, day);
+        return { day, retained: cell.retained, eligible: cell.eligible, pct: cell.pct };
+      },
+    );
+
+    return {
+      trackingEnabled: true,
+      trackingStart,
+      cohorts,
+      day1: cellFor(users, 1),
+      day7: cellFor(users, 7),
+      day30: cellFor(users, 30),
+      curve,
+    };
+  } catch {
+    return emptyRetentionStats();
+  }
+}
+
 export async function fetchDashboardStats(): Promise<DashboardStats> {
   const admin = getSupabaseAdmin();
   // Calendar-day windows so the card totals match the 30-day chart exactly
@@ -342,6 +541,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     openReports,
     recentReports,
     activity,
+    retention,
   ] = await Promise.all([
     countRows('profiles'),
     countRowsGte('profiles', 'created_at', since24h),
@@ -375,6 +575,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
       .order('created_at', { ascending: false })
       .limit(8),
     fetchActivityStats(),
+    fetchRetentionStats(),
   ]);
 
   if (signupRows.error) throw signupRows.error;
@@ -402,6 +603,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
       topPrograms: rankField(programRows.data ?? [], 'study_abroad_program'),
     },
     activity,
+    retention,
     engagement: {
       trips,
       tripsUpcoming,
