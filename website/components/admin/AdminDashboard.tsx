@@ -390,7 +390,7 @@ export function AdminDashboard() {
                 <h2 className={styles.panelTitle}>User retention · weekly cohorts</h2>
                 <p className={styles.subtitle}>
                   {stats.retention.trackingEnabled
-                    ? `Share of each signup week still opening the app N days after joining.${stats.retention.trackingStart ? ` Tracking started ${formatDay(stats.retention.trackingStart)}.` : ''} Cells show — for days a cohort has not reached yet.`
+                    ? `Share of each signup week still opening the app N days after joining. Cohorts start Oct 1, 2026.${stats.retention.trackingStart ? ` Days before ${formatDay(stats.retention.trackingStart)} were never recorded (tracking began then) and show —, as do days a cohort has not reached yet.` : ''}`
                     : 'Retention tracking is not available yet — no app-open data in Supabase.'}
                 </p>
               </div>
