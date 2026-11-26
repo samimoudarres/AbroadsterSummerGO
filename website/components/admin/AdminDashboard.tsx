@@ -24,18 +24,44 @@ function formatWhen(iso: string | null | undefined) {
   }).format(new Date(iso));
 }
 
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+function formatDay(date: string) {
+  const parts = date.split('-');
+  if (parts.length !== 3) return date;
+  return `${MONTHS[Number(parts[1]) - 1]} ${Number(parts[2])}`;
+}
+
 function StatCard({
   label,
   value,
   hint,
+  live,
 }: {
   label: string;
   value: number;
   hint?: string;
+  live?: boolean;
 }) {
   return (
     <article className={styles.statCard}>
-      <p className={styles.statLabel}>{label}</p>
+      <p className={styles.statLabel}>
+        {live ? <span className={styles.liveDot} aria-label="live" /> : null}
+        {label}
+      </p>
       <p className={styles.statValue}>{formatNumber(value)}</p>
       {hint ? <p className={styles.statHint}>{hint}</p> : null}
     </article>
@@ -48,6 +74,10 @@ export function AdminDashboard() {
   const [users, setUsers] = useState<UserListRow[]>([]);
   const [userQuery, setUserQuery] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [activitySeries, setActivitySeries] = useState<'users' | 'opens'>(
+    'users',
+  );
+  const [hoveredDay, setHoveredDay] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -112,6 +142,25 @@ export function AdminDashboard() {
     return Math.max(1, ...stats.users.signupsByDay.map((d) => d.count));
   }, [stats]);
 
+  const activityMax = useMemo(() => {
+    if (!stats) return 1;
+    return Math.max(
+      1,
+      ...stats.activity.byDay.map((d) =>
+        activitySeries === 'users' ? d.activeUsers : d.opens,
+      ),
+    );
+  }, [stats, activitySeries]);
+
+  const hoveredActivity = useMemo(() => {
+    if (!stats || !hoveredDay) return null;
+    return (
+      stats.activity.byDay.find((d) => d.date === hoveredDay) ?? null
+    );
+  }, [stats, hoveredDay]);
+
+  const peakActivity = stats?.activity.peakDay ?? null;
+
   const filteredUsers = useMemo(() => {
     const q = userQuery.trim().toLowerCase();
     if (!q) return users;
@@ -171,6 +220,27 @@ export function AdminDashboard() {
             <StatCard label="Signups (7d)" value={stats.users.last7d} />
             <StatCard label="Signups (30d)" value={stats.users.last30d} />
             <StatCard
+              label="Live now"
+              value={stats.activity.liveNow}
+              hint="active in the last 15 min"
+              live
+            />
+            <StatCard
+              label="Active today"
+              value={stats.activity.activeToday}
+              hint={`${formatNumber(stats.activity.opensToday)} opens today`}
+            />
+            <StatCard
+              label="Active (30d)"
+              value={stats.activity.active30d}
+              hint="distinct users with ≥1 open"
+            />
+            <StatCard
+              label="App opens (30d)"
+              value={stats.activity.opens30d}
+              hint={`${formatNumber(stats.activity.opens7d)} in the last 7d`}
+            />
+            <StatCard
               label="Trips"
               value={stats.engagement.trips}
               hint={`${stats.engagement.tripsUpcoming} upcoming/planning`}
@@ -208,6 +278,66 @@ export function AdminDashboard() {
                   <span className={styles.barLabel}>{point.date.slice(5)}</span>
                 </div>
               ))}
+            </div>
+          </section>
+
+          <section className={styles.panel}>
+            <div className={styles.panelHeaderRow}>
+              <div>
+                <h2 className={styles.panelTitle}>Active users · last 30 days</h2>
+                <p className={styles.subtitle}>
+                  {stats.activity.trackingEnabled
+                    ? `${formatNumber(stats.activity.active30d)} users opened the app in the last 30 days · ${formatNumber(stats.activity.opens30d)} total opens${peakActivity ? ` · peak ${formatDay(peakActivity.date)} with ${formatNumber(peakActivity.activeUsers)} users` : ''}`
+                    : 'App-open tracking is not available yet — no activity data in Supabase.'}
+                </p>
+              </div>
+              <div className={styles.toggle} role="group" aria-label="Chart series">
+                <button
+                  type="button"
+                  className={`${styles.toggleBtn} ${activitySeries === 'users' ? styles.toggleBtnActive : ''}`}
+                  onClick={() => setActivitySeries('users')}
+                >
+                  Active users
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.toggleBtn} ${activitySeries === 'opens' ? styles.toggleBtnActive : ''}`}
+                  onClick={() => setActivitySeries('opens')}
+                >
+                  App opens
+                </button>
+              </div>
+            </div>
+            <p className={styles.chartTip}>
+              {hoveredActivity
+                ? `${formatDay(hoveredActivity.date)} — ${formatNumber(hoveredActivity.activeUsers)} active users · ${formatNumber(hoveredActivity.opens)} opens`
+                : peakActivity
+                  ? `Hover a bar for a day's numbers — peak so far: ${formatDay(peakActivity.date)} (${formatNumber(peakActivity.activeUsers)} users)`
+                  : 'Hover a bar to see each day.'}
+            </p>
+            <div className={styles.chart} onMouseLeave={() => setHoveredDay(null)}>
+              {stats.activity.byDay.map((point) => {
+                const value =
+                  activitySeries === 'users' ? point.activeUsers : point.opens;
+                const isPeak =
+                  activitySeries === 'users' &&
+                  peakActivity?.date === point.date;
+                return (
+                  <div
+                    key={point.date}
+                    className={styles.barWrap}
+                    onMouseEnter={() => setHoveredDay(point.date)}
+                    onClick={() => setHoveredDay(point.date)}
+                  >
+                    <div
+                      className={`${styles.bar} ${isPeak ? styles.barPeak : ''} ${hoveredDay === point.date ? styles.barHovered : ''}`}
+                      style={{ height: `${(value / activityMax) * 100}%` }}
+                      title={`${formatDay(point.date)}: ${formatNumber(point.activeUsers)} users, ${formatNumber(point.opens)} opens`}
+                    />
+                    <span className={styles.barLabel}>{point.date.slice(5)}</span>
+                  </div>
+                );
+              })}
             </div>
           </section>
 
