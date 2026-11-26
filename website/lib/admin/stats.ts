@@ -392,15 +392,20 @@ function mondayKey(key: string) {
 
 const RETENTION_COHORT_DAYS = [0, 1, 3, 7, 14, 30];
 
+// Cohorts go back to the start of October 2026.
+const RETENTION_SINCE = '2026-10-01';
+
 /**
  * Cohort retention — the standard way consumer apps track it. Rows are
- * weekly signup cohorts (Monday-start, UTC); each cell is the share of
- * that cohort who opened the app N days after signing up. A user only
- * counts as eligible for day N once N days have passed since their own
- * signup, so recent cohorts show "—" for days they have not reached yet.
- * Only users who signed up on/after app-open tracking began are counted:
- * earlier signups have no recorded opens for their first days, so their
- * retention would read as 0% for the wrong reason. Never throws.
+ * weekly signup cohorts (Monday-start, UTC) going back to Oct 1, 2026;
+ * each cell is the share of that cohort who opened the app N days after
+ * signing up. A user only counts as eligible for day N once N days have
+ * passed since their own signup, so recent cohorts show "—" for days they
+ * have not reached yet. Days before app-open tracking began (Oct 18,
+ * 2026) were never recorded, so they are not measurable either: a user
+ * only counts for day N when signup day + N falls on/after tracking
+ * started. That keeps early-October cohorts honest instead of reading
+ * 0% for days with no data. Never throws.
  */
 async function fetchRetentionStats(): Promise<RetentionStats> {
   try {
@@ -452,7 +457,7 @@ async function fetchRetentionStats(): Promise<RetentionStats> {
 
     const users = profiles
       .map((p) => ({ id: p.id, signupDay: dayKey(p.created_at) }))
-      .filter((u) => u.signupDay >= trackingStart);
+      .filter((u) => u.signupDay >= RETENTION_SINCE);
     if (users.length === 0) {
       return { ...emptyRetentionStats(), trackingEnabled: true, trackingStart };
     }
@@ -461,9 +466,12 @@ async function fetchRetentionStats(): Promise<RetentionStats> {
       let eligible = 0;
       let retained = 0;
       for (const user of members) {
+        const targetDay = addDaysToKey(user.signupDay, day);
+        // Day falls before tracking began — never recorded, not measurable.
+        if (targetDay < trackingStart) continue;
         if (daysBetween(user.signupDay, today) < day) continue;
         eligible += 1;
-        if (activeDays.get(user.id)?.has(addDaysToKey(user.signupDay, day))) {
+        if (activeDays.get(user.id)?.has(targetDay)) {
           retained += 1;
         }
       }
