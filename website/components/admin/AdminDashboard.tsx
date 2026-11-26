@@ -45,6 +45,11 @@ function formatDay(date: string) {
   return `${MONTHS[Number(parts[1]) - 1]} ${Number(parts[2])}`;
 }
 
+// Bar heights are pixels, not percentages: percentage heights never resolve
+// inside these flex column wrappers, so every bar rendered at the 4px
+// min-height and the charts looked flat/zero.
+const CHART_BAR_MAX_PX = 140;
+
 function StatCard({
   label,
   value,
@@ -78,6 +83,7 @@ export function AdminDashboard() {
     'users',
   );
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+  const [hoveredSignup, setHoveredSignup] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -159,7 +165,23 @@ export function AdminDashboard() {
     );
   }, [stats, hoveredDay]);
 
-  const peakActivity = stats?.activity.peakDay ?? null;
+  const hoveredSignupPoint = useMemo(() => {
+    if (!stats || !hoveredSignup) return null;
+    return (
+      stats.users.signupsByDay.find((d) => d.date === hoveredSignup) ?? null
+    );
+  }, [stats, hoveredSignup]);
+
+  // Peak day follows the selected series (users vs opens).
+  const peakActivity = useMemo(() => {
+    if (!stats) return null;
+    if (activitySeries === 'users') {
+      const p = stats.activity.peakDay;
+      return p ? { date: p.date, value: p.activeUsers, label: 'users' } : null;
+    }
+    const p = stats.activity.peakOpensDay;
+    return p ? { date: p.date, value: p.opens, label: 'opens' } : null;
+  }, [stats, activitySeries]);
 
   const filteredUsers = useMemo(() => {
     const q = userQuery.trim().toLowerCase();
@@ -267,13 +289,28 @@ export function AdminDashboard() {
 
           <section className={styles.panel}>
             <h2 className={styles.panelTitle}>Signups · last 30 days</h2>
-            <div className={styles.chart}>
+            <p className={styles.chartTip}>
+              {hoveredSignupPoint
+                ? `${formatDay(hoveredSignupPoint.date)} — ${formatNumber(hoveredSignupPoint.count)} signups`
+                : 'Hover a bar to see each day.'}
+            </p>
+            <div
+              className={styles.chart}
+              onMouseLeave={() => setHoveredSignup(null)}
+            >
               {stats.users.signupsByDay.map((point) => (
-                <div key={point.date} className={styles.barWrap}>
+                <div
+                  key={point.date}
+                  className={styles.barWrap}
+                  onMouseEnter={() => setHoveredSignup(point.date)}
+                  onClick={() => setHoveredSignup(point.date)}
+                >
                   <div
-                    className={styles.bar}
-                    style={{ height: `${(point.count / chartMax) * 100}%` }}
-                    title={`${point.date}: ${point.count}`}
+                    className={`${styles.bar} ${hoveredSignup === point.date ? styles.barHovered : ''}`}
+                    style={{
+                      height: `${Math.round((point.count / chartMax) * CHART_BAR_MAX_PX)}px`,
+                    }}
+                    title={`${formatDay(point.date)}: ${point.count} signups`}
                   />
                   <span className={styles.barLabel}>{point.date.slice(5)}</span>
                 </div>
@@ -287,7 +324,7 @@ export function AdminDashboard() {
                 <h2 className={styles.panelTitle}>Active users · last 30 days</h2>
                 <p className={styles.subtitle}>
                   {stats.activity.trackingEnabled
-                    ? `${formatNumber(stats.activity.active30d)} users opened the app in the last 30 days · ${formatNumber(stats.activity.opens30d)} total opens${peakActivity ? ` · peak ${formatDay(peakActivity.date)} with ${formatNumber(peakActivity.activeUsers)} users` : ''}`
+                    ? `${formatNumber(stats.activity.active30d)} users opened the app in the last 30 days · ${formatNumber(stats.activity.opens30d)} total opens${peakActivity ? ` · peak ${formatDay(peakActivity.date)} with ${formatNumber(peakActivity.value)} ${peakActivity.label}` : ''}`
                     : 'App-open tracking is not available yet — no activity data in Supabase.'}
                 </p>
               </div>
@@ -312,16 +349,14 @@ export function AdminDashboard() {
               {hoveredActivity
                 ? `${formatDay(hoveredActivity.date)} — ${formatNumber(hoveredActivity.activeUsers)} active users · ${formatNumber(hoveredActivity.opens)} opens`
                 : peakActivity
-                  ? `Hover a bar for a day's numbers — peak so far: ${formatDay(peakActivity.date)} (${formatNumber(peakActivity.activeUsers)} users)`
+                  ? `Hover a bar for a day's numbers — peak so far: ${formatDay(peakActivity.date)} (${formatNumber(peakActivity.value)} ${peakActivity.label})`
                   : 'Hover a bar to see each day.'}
             </p>
             <div className={styles.chart} onMouseLeave={() => setHoveredDay(null)}>
               {stats.activity.byDay.map((point) => {
                 const value =
                   activitySeries === 'users' ? point.activeUsers : point.opens;
-                const isPeak =
-                  activitySeries === 'users' &&
-                  peakActivity?.date === point.date;
+                const isPeak = peakActivity?.date === point.date;
                 return (
                   <div
                     key={point.date}
@@ -331,7 +366,9 @@ export function AdminDashboard() {
                   >
                     <div
                       className={`${styles.bar} ${isPeak ? styles.barPeak : ''} ${hoveredDay === point.date ? styles.barHovered : ''}`}
-                      style={{ height: `${(value / activityMax) * 100}%` }}
+                      style={{
+                        height: `${Math.round((value / activityMax) * CHART_BAR_MAX_PX)}px`,
+                      }}
                       title={`${formatDay(point.date)}: ${formatNumber(point.activeUsers)} users, ${formatNumber(point.opens)} opens`}
                     />
                     <span className={styles.barLabel}>{point.date.slice(5)}</span>
