@@ -84,6 +84,7 @@ export function AdminDashboard() {
   );
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
   const [hoveredSignup, setHoveredSignup] = useState<string | null>(null);
+  const [hoveredCurveDay, setHoveredCurveDay] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -182,6 +183,11 @@ export function AdminDashboard() {
     const p = stats.activity.peakOpensDay;
     return p ? { date: p.date, value: p.opens, label: 'opens' } : null;
   }, [stats, activitySeries]);
+
+  const hoveredCurvePoint = useMemo(() => {
+    if (!stats || hoveredCurveDay === null) return null;
+    return stats.retention.curve.find((p) => p.day === hoveredCurveDay) ?? null;
+  }, [stats, hoveredCurveDay]);
 
   const filteredUsers = useMemo(() => {
     const q = userQuery.trim().toLowerCase();
@@ -376,6 +382,137 @@ export function AdminDashboard() {
                 );
               })}
             </div>
+          </section>
+
+          <section className={styles.panel}>
+            <div className={styles.panelHeaderRow}>
+              <div>
+                <h2 className={styles.panelTitle}>User retention · weekly cohorts</h2>
+                <p className={styles.subtitle}>
+                  {stats.retention.trackingEnabled
+                    ? `Share of each signup week still opening the app N days after joining.${stats.retention.trackingStart ? ` Tracking started ${formatDay(stats.retention.trackingStart)}.` : ''} Cells show — for days a cohort has not reached yet.`
+                    : 'Retention tracking is not available yet — no app-open data in Supabase.'}
+                </p>
+              </div>
+            </div>
+            {stats.retention.trackingEnabled ? (
+              <>
+                <div className={styles.miniGrid}>
+                  {[
+                    { label: 'Day 1 retention', cell: stats.retention.day1 },
+                    { label: 'Day 7 retention', cell: stats.retention.day7 },
+                    { label: 'Day 30 retention', cell: stats.retention.day30 },
+                  ].map(({ label, cell }) => (
+                    <div key={label} className={styles.miniStat}>
+                      <p className={styles.statLabel}>{label}</p>
+                      <p className={styles.miniStatValue}>
+                        {cell.pct === null ? '—' : `${cell.pct}%`}
+                      </p>
+                      <p className={styles.statHint}>
+                        {cell.eligible > 0
+                          ? `${formatNumber(cell.retained)} of ${formatNumber(cell.eligible)} users came back`
+                          : 'No users old enough yet'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <h3 className={styles.rankHeading}>
+                  Average retention by day since signup
+                </h3>
+                <p className={styles.chartTip}>
+                  {hoveredCurvePoint
+                    ? hoveredCurvePoint.pct === null
+                      ? `Day ${hoveredCurvePoint.day} — no users old enough yet`
+                      : `Day ${hoveredCurvePoint.day} — ${hoveredCurvePoint.pct}% retained (${formatNumber(hoveredCurvePoint.retained)} of ${formatNumber(hoveredCurvePoint.eligible)} users)`
+                    : 'Hover a bar for a day.'}
+                </p>
+                <div
+                  className={styles.retentionCurve}
+                  onMouseLeave={() => setHoveredCurveDay(null)}
+                >
+                  {stats.retention.curve.map((point) => (
+                    <div
+                      key={point.day}
+                      className={styles.barWrap}
+                      onMouseEnter={() => setHoveredCurveDay(point.day)}
+                      onClick={() => setHoveredCurveDay(point.day)}
+                    >
+                      <div
+                        className={`${styles.bar} ${hoveredCurveDay === point.day ? styles.barHovered : ''}`}
+                        style={{
+                          height: `${point.pct === null ? 0 : point.pct}px`,
+                        }}
+                        title={
+                          point.pct === null
+                            ? `Day ${point.day}: no users old enough yet`
+                            : `Day ${point.day}: ${point.pct}% retained (${point.retained} of ${point.eligible} users)`
+                        }
+                      />
+                      <span className={styles.barLabel}>
+                        {[0, 1, 3, 7, 14, 21, 30].includes(point.day)
+                          ? `D${point.day}`
+                          : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <h3 className={styles.rankHeading}>
+                  Cohorts · % still active N days after signup
+                </h3>
+                {stats.retention.cohorts.length === 0 ? (
+                  <p className={styles.empty}>
+                    No signup cohorts yet in the tracked window.
+                  </p>
+                ) : (
+                  <div className={styles.tableWrap}>
+                    <table className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th>Week of</th>
+                          <th>Users</th>
+                          <th>Day 0</th>
+                          <th>Day 1</th>
+                          <th>Day 3</th>
+                          <th>Day 7</th>
+                          <th>Day 14</th>
+                          <th>Day 30</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stats.retention.cohorts.map((cohort) => (
+                          <tr key={cohort.cohortStart}>
+                            <td>Week of {formatDay(cohort.cohortStart)}</td>
+                            <td>{formatNumber(cohort.size)}</td>
+                            {cohort.cells.map((cell) => (
+                              <td
+                                key={cell.day}
+                                style={
+                                  cell.pct === null
+                                    ? undefined
+                                    : {
+                                        background: `rgba(23, 88, 100, ${(cell.pct / 100) * 0.22})`,
+                                        fontWeight: 700,
+                                      }
+                                }
+                                title={
+                                  cell.pct === null
+                                    ? `Day ${cell.day}: not reached yet`
+                                    : `Day ${cell.day}: ${cell.retained} of ${cell.eligible} users (${cell.pct}%)`
+                                }
+                              >
+                                {cell.pct === null ? '—' : `${cell.pct}%`}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            ) : null}
           </section>
 
           <section className={styles.panel}>
