@@ -196,7 +196,7 @@ async function countRowsIn(table: string, column: string, values: string[]) {
 }
 
 function buildActivitySeries(
-  rows: { user_id: string; created_at: string }[],
+  rows: { user_id: string; kind: string; created_at: string }[],
   days: number,
 ): ActivityPoint[] {
   const perDay = new Map<string, { users: Set<string>; opens: number }>();
@@ -213,8 +213,10 @@ function buildActivitySeries(
   for (const row of rows) {
     const day = perDay.get(dayKey(row.created_at));
     if (!day) continue;
+    // A user is active on a day if ANY activity was recorded (app_open,
+    // home_feed, ...). "Opens" still counts app_open events only.
     day.users.add(row.user_id);
-    day.opens += 1;
+    if (row.kind === 'app_open') day.opens += 1;
   }
 
   return Array.from(perDay.entries()).map(([date, day]) => ({
@@ -251,10 +253,14 @@ function isMissingActivityTable(error: { code?: string; message?: string } | nul
 
 /**
  * Daily active users + app opens for the last 30 days, from
- * user_activity_events (kind = 'app_open'). "Live now" is profiles whose
- * last_active_at is within the last 15 minutes (any recorded activity).
- * Never throws: if activity tracking is unavailable the dashboard still
- * loads with zeroed activity stats.
+ * user_activity_events. A user counts as active on a day when ANY activity
+ * was recorded (app_open, home_feed, ...), not app_open alone: the app
+ * stopped logging the first app_open for many new users from Nov 17,
+ * 2026, while home_feed kept logging, so app_open-only activity
+ * understates real usage. "Opens" still counts app_open events only.
+ * "Live now" is profiles whose last_active_at is within the last 15
+ * minutes (any recorded activity). Never throws: if activity tracking
+ * is unavailable the dashboard still loads with zeroed activity stats.
  */
 async function fetchActivityStats(): Promise<ActivityStats> {
   try {
@@ -267,13 +273,13 @@ async function fetchActivityStats(): Promise<ActivityStats> {
     const liveSince = new Date(Date.now() - 15 * 60 * 1000).toISOString();
 
     // Paginate: the client caps a single select at 1,000 rows.
-    const rows: { user_id: string; created_at: string }[] = [];
+    // All kinds: active = any recorded activity (see the doc comment).
+    const rows: { user_id: string; kind: string; created_at: string }[] = [];
     const pageSize = 1000;
     for (let from = 0; ; from += pageSize) {
       const { data, error } = await admin
         .from('user_activity_events')
-        .select('user_id, created_at')
-        .eq('kind', 'app_open')
+        .select('user_id, kind, created_at')
         .gte('created_at', since30d)
         .order('created_at', { ascending: true })
         .range(from, from + pageSize - 1);
@@ -291,15 +297,18 @@ async function fetchActivityStats(): Promise<ActivityStats> {
     const users30d = new Set<string>();
     let opensToday = 0;
     let opens7d = 0;
+    let opens30d = 0;
     for (const row of rows) {
       users30d.add(row.user_id);
+      const isOpen = row.kind === 'app_open';
+      if (isOpen) opens30d += 1;
       if (row.created_at >= since7d) {
         users7d.add(row.user_id);
-        opens7d += 1;
+        if (isOpen) opens7d += 1;
       }
       if (row.created_at >= sinceToday) {
         usersToday.add(row.user_id);
-        opensToday += 1;
+        if (isOpen) opensToday += 1;
       }
     }
 
@@ -334,7 +343,7 @@ async function fetchActivityStats(): Promise<ActivityStats> {
       active30d: users30d.size,
       opensToday,
       opens7d,
-      opens30d: rows.length,
+      opens30d,
       peakDay,
       peakOpensDay,
       trackingEnabled: true,
@@ -398,8 +407,12 @@ const RETENTION_SINCE = '2026-10-01';
 /**
  * Cohort retention — the standard way consumer apps track it. Rows are
  * weekly signup cohorts (Monday-start, UTC) going back to Oct 1, 2026;
- * each cell is the share of that cohort who opened the app N days after
- * signing up. A user only counts as eligible for day N once N days have
+ * each cell is the share of that cohort who were active in the app N days
+ * after signing up. "Active" means ANY recorded activity event that day
+ * (app_open, home_feed, ...), not app_open alone: the app stopped logging
+ * the first app_open for many new users from Nov 17, 2026, while
+ * home_feed kept logging, so app_open-only retention understates real
+ * retention. A user only counts as eligible for day N once N days have
  * passed since their own signup, so recent cohorts show "—" for days they
  * have not reached yet. Days before app-open tracking began (Oct 18,
  * 2026) were never recorded, so they are not measurable either: a user
@@ -428,12 +441,11 @@ async function fetchRetentionStats(): Promise<RetentionStats> {
       if ((data ?? []).length < pageSize) break;
     }
 
-    const events: { user_id: string; created_at: string }[] = [];
+    const events: { user_id: string; kind: string; created_at: string }[] = [];
     for (let from = 0; ; from += pageSize) {
       const { data, error } = await admin
         .from('user_activity_events')
-        .select('user_id, created_at')
-        .eq('kind', 'app_open')
+        .select('user_id, kind, created_at')
         .gte('created_at', sinceEvents)
         .order('created_at', { ascending: true })
         .range(from, from + pageSize - 1);
@@ -446,7 +458,11 @@ async function fetchRetentionStats(): Promise<RetentionStats> {
     }
 
     if (events.length === 0) return emptyRetentionStats();
-    const trackingStart = dayKey(events[0].created_at);
+    // Earliest APP_OPEN date: retention is only measurable from when
+    // tracking began, even though any activity counts as active.
+    const trackingStart = dayKey(
+      (events.find((e) => e.kind === 'app_open') ?? events[0]).created_at,
+    );
 
     const activeDays = new Map<string, Set<string>>();
     for (const event of events) {

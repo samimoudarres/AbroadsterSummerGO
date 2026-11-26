@@ -13,7 +13,7 @@ export type UserListRow = {
   posts: number;
   stampsGiven: number;
   messages: number;
-  appOpens7d: number;
+  activeDays7d: number;
   hasPush: boolean;
 };
 
@@ -64,13 +64,13 @@ export type UserActivityDetail = {
     stampsGiven30d: number;
     messages7d: number;
     messages30d: number;
-    appOpensToday: number;
-    appOpens7d: number;
-    appOpens30d: number;
-    avgAppOpensPerDay7d: number;
+    activeDaysToday: number;
+    activeDays7d: number;
+    activeDays30d: number;
+    avgActiveDaysPerDay7d: number;
   };
   series: {
-    appOpensByDay: DayCount[];
+    activeDaysByDay: DayCount[];
     postsByDay: DayCount[];
     stampsByDay: DayCount[];
   };
@@ -126,6 +126,30 @@ function fillSeries(
     if (counts.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return toSeries(counts);
+}
+
+/** One per day with any activity (0/1), for active-day series. */
+function fillDistinctDaySeries(
+  rows: { created_at: string }[],
+  days: number,
+): DayCount[] {
+  const counts = emptySeries(days);
+  for (const row of rows) {
+    const key = dayKey(row.created_at);
+    if (counts.has(key)) counts.set(key, 1);
+  }
+  return toSeries(counts);
+}
+
+function countDistinctDays(
+  rows: { created_at: string }[],
+  sinceIso: string,
+): number {
+  const days = new Set<string>();
+  for (const row of rows) {
+    if (row.created_at >= sinceIso) days.add(dayKey(row.created_at));
+  }
+  return days.size;
 }
 
 function isMissingRelation(error: { code?: string; message?: string } | null) {
@@ -238,7 +262,7 @@ export async function fetchUsersActivityList(): Promise<UserListRow[]> {
   const ids = profiles.map((p) => p.id);
   if (!ids.length) return [];
 
-  const [posts, stamps, messages, pushTokens, appOpens, authUsers] =
+  const [posts, stamps, messages, pushTokens, activityRows, authUsers] =
     await Promise.all([
       admin.from('posts').select('author_id').in('author_id', ids),
       admin.from('post_stamps').select('user_id').in('user_id', ids),
@@ -247,12 +271,11 @@ export async function fetchUsersActivityList(): Promise<UserListRow[]> {
       hasActivity
         ? admin
             .from('user_activity_events')
-            .select('user_id')
-            .eq('kind', 'app_open')
+            .select('user_id, created_at')
             .gte('created_at', since7d)
             .in('user_id', ids)
         : Promise.resolve({
-            data: [] as { user_id: string }[],
+            data: [] as { user_id: string; created_at: string }[],
             error: null,
           }),
       admin.auth.admin.listUsers({ page: 1, perPage: 200 }),
@@ -263,11 +286,14 @@ export async function fetchUsersActivityList(): Promise<UserListRow[]> {
   if (messages.error) throw messages.error;
   if (pushTokens.error) throw pushTokens.error;
   // Activity table is optional — never fail the whole roster on it.
-  const openRows = isMissingRelation(appOpens.error)
+  const activityRowsData = isMissingRelation(activityRows.error)
     ? []
-    : appOpens.error
+    : activityRows.error
       ? []
-      : ((appOpens.data ?? []) as { user_id: string }[]);
+      : ((activityRows.data ?? []) as {
+          user_id: string;
+          created_at: string;
+        }[]);
 
   const postCounts = countMap(
     (posts.data ?? []) as Record<string, string>[],
@@ -281,7 +307,15 @@ export async function fetchUsersActivityList(): Promise<UserListRow[]> {
     (messages.data ?? []) as Record<string, string>[],
     'sender_id',
   );
-  const openCounts = countMap(openRows as Record<string, string>[], 'user_id');
+  // Active days in the last 7d (any recorded activity): app_open alone
+  // undercounts since Nov 17, 2026, when the app stopped logging the
+  // first open for many new users while other events kept logging.
+  const activeDaysByUser = new Map<string, Set<string>>();
+  for (const row of activityRowsData) {
+    const days = activeDaysByUser.get(row.user_id) ?? new Set<string>();
+    days.add(dayKey(row.created_at));
+    activeDaysByUser.set(row.user_id, days);
+  }
   const pushSet = new Set((pushTokens.data ?? []).map((r) => r.user_id));
   const signInById = new Map(
     (authUsers.data?.users ?? []).map((u) => [u.id, u.last_sign_in_at ?? null]),
@@ -298,7 +332,7 @@ export async function fetchUsersActivityList(): Promise<UserListRow[]> {
     posts: postCounts.get(p.id) ?? 0,
     stampsGiven: stampCounts.get(p.id) ?? 0,
     messages: messageCounts.get(p.id) ?? 0,
-    appOpens7d: openCounts.get(p.id) ?? 0,
+    activeDays7d: activeDaysByUser.get(p.id)?.size ?? 0,
     hasPush: pushSet.has(p.id),
   }));
 }
@@ -380,14 +414,11 @@ export async function fetchUserActivityDetail(
     notificationsUnread,
     pushTokens,
     appOpens,
-    appOpensToday,
-    appOpens7d,
-    appOpens30d,
     homeFeedViews,
     notificationsOpens,
     postsSeriesRows,
     stampsSeriesRows,
-    opensSeriesRows,
+    activityRows30d,
     notifKinds,
     recentPosts,
     recentOpens,
@@ -437,36 +468,6 @@ export async function fetchUserActivityDetail(
             .from('user_activity_events')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', userId)
-            .eq('kind', 'app_open')
-            .gte('created_at', sinceToday),
-        )
-      : Promise.resolve(0),
-    hasActivity
-      ? safeCount(() =>
-          admin
-            .from('user_activity_events')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', userId)
-            .eq('kind', 'app_open')
-            .gte('created_at', since7d),
-        )
-      : Promise.resolve(0),
-    hasActivity
-      ? safeCount(() =>
-          admin
-            .from('user_activity_events')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', userId)
-            .eq('kind', 'app_open')
-            .gte('created_at', since30d),
-        )
-      : Promise.resolve(0),
-    hasActivity
-      ? safeCount(() =>
-          admin
-            .from('user_activity_events')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', userId)
             .eq('kind', 'home_feed'),
         )
       : Promise.resolve(0),
@@ -489,12 +490,13 @@ export async function fetchUserActivityDetail(
       .select('created_at')
       .eq('user_id', userId)
       .gte('created_at', since30d),
+    // Any activity in the last 30d (all kinds): active days, not app_open
+    // events — app_open alone undercounts since Nov 17, 2026.
     hasActivity
       ? admin
           .from('user_activity_events')
           .select('created_at')
           .eq('user_id', userId)
-          .eq('kind', 'app_open')
           .gte('created_at', since30d)
       : Promise.resolve({ data: [] as { created_at: string }[], error: null }),
     admin.from('notifications').select('kind').eq('user_id', userId),
@@ -531,9 +533,12 @@ export async function fetchUserActivityDetail(
     throw recentPosts.error;
   }
 
-  const openSeriesData = isMissingRelation(opensSeriesRows.error)
+  const activityRowsData = isMissingRelation(activityRows30d.error)
     ? []
-    : ((opensSeriesRows.data ?? []) as { created_at: string }[]);
+    : ((activityRows30d.data ?? []) as { created_at: string }[]);
+  const activeDaysToday = countDistinctDays(activityRowsData, sinceToday);
+  const activeDays7d = countDistinctDays(activityRowsData, since7d);
+  const activeDays30d = countDistinctDays(activityRowsData, since30d);
   const recentOpenData = isMissingRelation(recentOpens.error)
     ? []
     : ((recentOpens.data ?? []) as ActivityOpenRow[]);
@@ -597,13 +602,13 @@ export async function fetchUserActivityDetail(
       stampsGiven30d,
       messages7d,
       messages30d,
-      appOpensToday,
-      appOpens7d,
-      appOpens30d,
-      avgAppOpensPerDay7d: Math.round((appOpens7d / 7) * 10) / 10,
+      activeDaysToday,
+      activeDays7d,
+      activeDays30d,
+      avgActiveDaysPerDay7d: Math.round((activeDays7d / 7) * 10) / 10,
     },
     series: {
-      appOpensByDay: fillSeries(openSeriesData, 30),
+      activeDaysByDay: fillDistinctDaySeries(activityRowsData, 30),
       postsByDay: fillSeries(
         (postsSeriesRows.data ?? []) as { created_at: string }[],
         30,
