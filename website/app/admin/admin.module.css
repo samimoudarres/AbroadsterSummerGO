@@ -106,6 +106,25 @@
   display: block;
 }
 
+.dateNav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.dateInput {
+  border: 1px solid rgba(23, 88, 100, 0.25);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  background: var(--white);
+  color: var(--teal);
+  font-weight: 600;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
 .barWrap {
   display: flex;
   flex-direction: column;
