@@ -377,18 +377,26 @@ function emptyHourlyStats(date: string): HourlyStats {
 }
 
 /**
- * Hour-by-hour active users for today (UTC), from user_activity_events.
+ * Hour-by-hour active users for one UTC day, from user_activity_events.
  * Same "active" definition as the daily stats: a user counts in an hour
  * when ANY activity was recorded in that hour. Hours are UTC, matching
- * the dashboard's UTC-day convention; future hours read 0. Never
- * throws: if activity tracking is unavailable the intraday view loads
- * with zeroed points.
+ * the dashboard's UTC-day convention; future hours read 0. `dateKey`
+ * defaults to today; an invalid or future date is clamped to today.
+ * Never throws: if activity tracking is unavailable the intraday view
+ * loads with zeroed points.
  */
-async function fetchHourlyActivityStats(): Promise<HourlyStats> {
+export async function fetchHourlyActivityStats(
+  dateKey?: string,
+): Promise<HourlyStats> {
   const todayKey = dayKey(new Date().toISOString());
+  const key =
+    dateKey && /^\d{4}-\d{2}-\d{2}$/.test(dateKey) && dateKey <= todayKey
+      ? dateKey
+      : todayKey;
   try {
     const admin = getSupabaseAdmin();
-    const sinceToday = isoDaysAgo(0);
+    const since = `${key}T00:00:00.000Z`;
+    const until = `${addDaysToKey(key, 1)}T00:00:00.000Z`;
     // Paginate: the client caps a single select at 1,000 rows.
     const rows: { user_id: string; created_at: string }[] = [];
     const pageSize = 1000;
@@ -396,11 +404,12 @@ async function fetchHourlyActivityStats(): Promise<HourlyStats> {
       const { data, error } = await admin
         .from('user_activity_events')
         .select('user_id, created_at')
-        .gte('created_at', sinceToday)
+        .gte('created_at', since)
+        .lt('created_at', until)
         .order('created_at', { ascending: true })
         .range(from, from + pageSize - 1);
       if (error) {
-        if (isMissingActivityTable(error)) return emptyHourlyStats(todayKey);
+        if (isMissingActivityTable(error)) return emptyHourlyStats(key);
         throw error;
       }
       rows.push(...(data ?? []));
@@ -430,7 +439,7 @@ async function fetchHourlyActivityStats(): Promise<HourlyStats> {
     if (peakUsers === 0) peakHour = null;
 
     return {
-      date: todayKey,
+      date: key,
       points,
       totalUsers: allUsers.size,
       peakHour,
@@ -438,7 +447,7 @@ async function fetchHourlyActivityStats(): Promise<HourlyStats> {
       trackingEnabled: true,
     };
   } catch {
-    return emptyHourlyStats(todayKey);
+    return emptyHourlyStats(key);
   }
 }
 
