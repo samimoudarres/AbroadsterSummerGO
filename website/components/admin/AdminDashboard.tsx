@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { DashboardStats } from '@/lib/admin/stats';
+import type { DashboardStats, HourlyStats } from '@/lib/admin/stats';
 import type { UserListRow } from '@/lib/admin/userActivity';
 import { UserActivityPanel } from './UserActivityPanel';
 import styles from '../../app/admin/admin.module.css';
@@ -52,6 +52,12 @@ const CHART_BAR_MAX_PX = 140;
 
 function formatHour(hour: number) {
   return `${String(hour).padStart(2, '0')}:00`;
+}
+
+function shiftDateKey(key: string, days: number) {
+  const d = new Date(`${key}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 /**
@@ -233,6 +239,14 @@ export function AdminDashboard() {
   const [activityView, setActivityView] = useState<'30d' | 'today'>('30d');
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
   const [hoveredHour, setHoveredHour] = useState<number | null>(null);
+  // Day the hourly view shows (UTC date). Defaults to today; a past day
+  // is fetched on demand from /api/admin/hourly.
+  const [hourlyDate, setHourlyDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [hourlyByDate, setHourlyByDate] = useState<HourlyStats | null>(null);
+  const [hourlyLoading, setHourlyLoading] = useState(false);
+  const [hourlyError, setHourlyError] = useState(false);
   const [hoveredSignup, setHoveredSignup] = useState<string | null>(null);
   const [hoveredCurveDay, setHoveredCurveDay] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -322,10 +336,63 @@ export function AdminDashboard() {
     ? new Date(stats.generatedAt).getUTCHours()
     : new Date().getUTCHours();
 
+  // Today's UTC date, from the backend's own hourly data when loaded.
+  const todayKey =
+    stats?.hourly.date ?? new Date().toISOString().slice(0, 10);
+  // Earliest day with activity data — the date picker goes back this far.
+  const hourlyMin =
+    stats?.retention.trackingStart ??
+    stats?.activity.byDay[0]?.date ??
+    todayKey;
+  // The hourly data on screen: today's comes with the dashboard stats;
+  // a past day is fetched on demand below.
+  const hourlyShown =
+    hourlyDate === todayKey ? (stats?.hourly ?? null) : hourlyByDate;
+  const hourlyCurrentHour =
+    hourlyDate === todayKey ? currentHourUtc : 23;
+
   const hoveredHourlyPoint = useMemo(() => {
-    if (!stats || hoveredHour === null) return null;
-    return stats.hourly.points[hoveredHour] ?? null;
-  }, [stats, hoveredHour]);
+    if (!hourlyShown || hoveredHour === null) return null;
+    return hourlyShown.points[hoveredHour] ?? null;
+  }, [hourlyShown, hoveredHour]);
+
+  const pickHourlyDate = useCallback((date: string) => {
+    setHourlyDate(date);
+    setHoveredHour(null);
+  }, []);
+
+  useEffect(() => {
+    if (activityView !== 'today' || hourlyDate === todayKey) return;
+    let cancelled = false;
+    setHourlyLoading(true);
+    setHourlyError(false);
+    fetch(`/api/admin/hourly?date=${hourlyDate}`, { cache: 'no-store' })
+      .then(async (res) => {
+        if (res.status === 401) {
+          router.replace('/admin/login');
+          return;
+        }
+        const data = (await res.json()) as {
+          ok?: boolean;
+          hourly?: HourlyStats;
+          error?: string;
+        };
+        if (!cancelled && res.ok && data.ok && data.hourly) {
+          setHourlyByDate(data.hourly);
+        } else if (!cancelled) {
+          setHourlyError(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setHourlyError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setHourlyLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activityView, hourlyDate, todayKey, router]);
 
   const hoveredSignupPoint = useMemo(() => {
     if (!stats || !hoveredSignup) return null;
@@ -490,13 +557,17 @@ export function AdminDashboard() {
               <div>
                 <h2 className={styles.panelTitle}>
                   {activityView === 'today'
-                    ? 'Active users · today, hour by hour'
+                    ? hourlyDate === todayKey
+                      ? 'Active users · today, hour by hour'
+                      : `Active users · ${formatDay(hourlyDate)}, hour by hour`
                     : 'Active users · last 30 days'}
                 </h2>
                 <p className={styles.subtitle}>
                   {stats.activity.trackingEnabled
                     ? activityView === 'today'
-                      ? `${formatNumber(stats.hourly.totalUsers)} users active today so far${stats.hourly.peakHour !== null ? ` · peak ${formatHour(stats.hourly.peakHour)} UTC with ${formatNumber(stats.hourly.peakUsers)} users` : ''} · hours in UTC`
+                      ? hourlyShown
+                        ? `${formatNumber(hourlyShown.totalUsers)} users active ${hourlyDate === todayKey ? 'today so far' : `on ${formatDay(hourlyDate)}`}${hourlyShown.peakHour !== null ? ` · peak ${formatHour(hourlyShown.peakHour)} UTC with ${formatNumber(hourlyShown.peakUsers)} users` : ''} · hours in UTC`
+                        : 'Loading that day…'
                       : `${formatNumber(stats.activity.active30d)} users were active in the last 30 days · ${formatNumber(stats.activity.opens30d)} app opens logged${peakActivity ? ` · peak ${formatDay(peakActivity.date)} with ${formatNumber(peakActivity.value)} ${peakActivity.label}` : ''}`
                     : 'App-open tracking is not available yet — no activity data in Supabase.'}
                 </p>
@@ -541,13 +612,59 @@ export function AdminDashboard() {
                 Today (hourly)
               </button>
             </div>
+            {activityView === 'today' ? (
+              <div className={styles.dateNav}>
+                <button
+                  type="button"
+                  className={styles.toggleBtn}
+                  disabled={hourlyDate <= hourlyMin}
+                  onClick={() => pickHourlyDate(shiftDateKey(hourlyDate, -1))}
+                  aria-label="Previous day"
+                >
+                  ‹
+                </button>
+                <input
+                  type="date"
+                  className={styles.dateInput}
+                  value={hourlyDate}
+                  min={hourlyMin}
+                  max={todayKey}
+                  onChange={(e) => {
+                    if (e.target.value) pickHourlyDate(e.target.value);
+                  }}
+                  aria-label="Day to view"
+                />
+                <button
+                  type="button"
+                  className={styles.toggleBtn}
+                  disabled={hourlyDate >= todayKey}
+                  onClick={() => pickHourlyDate(shiftDateKey(hourlyDate, 1))}
+                  aria-label="Next day"
+                >
+                  ›
+                </button>
+                {hourlyDate !== todayKey ? (
+                  <button
+                    type="button"
+                    className={styles.toggleBtn}
+                    onClick={() => pickHourlyDate(todayKey)}
+                  >
+                    Today
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             <p className={styles.chartTip}>
               {activityView === 'today'
-                ? hoveredHourlyPoint
-                  ? `${formatHour(hoveredHourlyPoint.hour)} UTC — ${formatNumber(hoveredHourlyPoint.users)} active users`
-                  : stats.hourly.peakHour !== null
-                    ? `Hover the line to see each hour — peak so far: ${formatHour(stats.hourly.peakHour)} UTC (${formatNumber(stats.hourly.peakUsers)} users)`
-                    : 'Hover the line to see each hour.'
+                ? hourlyLoading
+                  ? 'Loading that day…'
+                  : hourlyError
+                    ? 'Could not load that day — try picking it again.'
+                    : hoveredHourlyPoint
+                      ? `${formatHour(hoveredHourlyPoint.hour)} UTC — ${formatNumber(hoveredHourlyPoint.users)} active users`
+                      : hourlyShown?.peakHour !== null && hourlyShown
+                        ? `Hover the line to see each hour — peak: ${formatHour(hourlyShown.peakHour)} UTC (${formatNumber(hourlyShown.peakUsers)} users)`
+                        : 'Hover the line to see each hour.'
                 : hoveredActivity
                   ? `${formatDay(hoveredActivity.date)} — ${formatNumber(hoveredActivity.activeUsers)} active users · ${formatNumber(hoveredActivity.opens)} opens`
                   : peakActivity
@@ -555,12 +672,20 @@ export function AdminDashboard() {
                     : 'Hover a bar to see each day.'}
             </p>
             {activityView === 'today' ? (
-              <HourlyLineChart
-                points={stats.hourly.points}
-                currentHour={currentHourUtc}
-                hoveredHour={hoveredHour}
-                onHoverHour={setHoveredHour}
-              />
+              hourlyShown ? (
+                <HourlyLineChart
+                  points={hourlyShown.points}
+                  currentHour={hourlyCurrentHour}
+                  hoveredHour={hoveredHour}
+                  onHoverHour={setHoveredHour}
+                />
+              ) : (
+                <p className={styles.chartTip}>
+                  {hourlyLoading
+                    ? 'Loading that day…'
+                    : 'Could not load that day.'}
+                </p>
+              )
             ) : (
               <div className={styles.chart} onMouseLeave={() => setHoveredDay(null)}>
                 {stats.activity.byDay.map((point) => {
