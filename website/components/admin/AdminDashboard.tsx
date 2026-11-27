@@ -50,6 +50,154 @@ function formatDay(date: string) {
 // min-height and the charts looked flat/zero.
 const CHART_BAR_MAX_PX = 140;
 
+function formatHour(hour: number) {
+  return `${String(hour).padStart(2, '0')}:00`;
+}
+
+/**
+ * Intraday line chart: distinct active users per hour (UTC) for today.
+ * The line only runs up to the current hour — later hours have no data
+ * yet. Hovering an hour shows its numbers in the tip line above.
+ */
+function HourlyLineChart({
+  points,
+  currentHour,
+  hoveredHour,
+  onHoverHour,
+}: {
+  points: { hour: number; users: number }[];
+  currentHour: number;
+  hoveredHour: number | null;
+  onHoverHour: (hour: number | null) => void;
+}) {
+  const W = 720;
+  const H = 190;
+  const padL = 34;
+  const padR = 10;
+  const padT = 10;
+  const padB = 26;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const max = Math.max(1, ...points.map((p) => p.users));
+  const x = (hour: number) => padL + (hour / 23) * plotW;
+  const y = (v: number) => padT + (1 - v / max) * plotH;
+
+  const visible = points.filter((p) => p.hour <= currentHour);
+  const line = visible
+    .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.hour).toFixed(1)},${y(p.users).toFixed(1)}`)
+    .join(' ');
+  const area =
+    visible.length > 0
+      ? `${line} L${x(visible[visible.length - 1].hour).toFixed(1)},${y(0).toFixed(1)} L${x(visible[0].hour).toFixed(1)},${y(0).toFixed(1)} Z`
+      : '';
+  const peak = points.reduce(
+    (best, p) => (p.users > best.users ? p : best),
+    { hour: -1, users: 0 },
+  );
+  const hovered = hoveredHour !== null ? points[hoveredHour] : null;
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className={styles.lineChart}
+      role="img"
+      aria-label="Active users per hour today, UTC"
+      onMouseLeave={() => onHoverHour(null)}
+    >
+      {[0, 0.5, 1].map((f) => {
+        const v = Math.round(max * f);
+        return (
+          <g key={f}>
+            <line
+              x1={padL}
+              x2={W - padR}
+              y1={y(v)}
+              y2={y(v)}
+              stroke="rgba(23,88,100,0.12)"
+              strokeWidth={1}
+            />
+            <text
+              x={padL - 6}
+              y={y(v) + 3}
+              textAnchor="end"
+              fontSize={10}
+              fill="#4a5c64"
+            >
+              {v}
+            </text>
+          </g>
+        );
+      })}
+      {[0, 3, 6, 9, 12, 15, 18, 21].map((hour) => (
+        <text
+          key={hour}
+          x={x(hour)}
+          y={H - 8}
+          textAnchor="middle"
+          fontSize={10}
+          fill="#4a5c64"
+        >
+          {formatHour(hour)}
+        </text>
+      ))}
+      {area ? <path d={area} fill="rgba(47,143,157,0.12)" /> : null}
+      {line ? (
+        <path
+          d={line}
+          fill="none"
+          stroke="#2f8f9d"
+          strokeWidth={2.5}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      ) : null}
+      {visible.map((p) => (
+        <circle
+          key={p.hour}
+          cx={x(p.hour)}
+          cy={y(p.users)}
+          r={p.hour === peak.hour && p.users > 0 ? 5 : 3}
+          fill={p.hour === peak.hour && p.users > 0 ? '#b7791f' : '#175864'}
+          stroke="#ffffff"
+          strokeWidth={1}
+        />
+      ))}
+      {hovered && hovered.hour <= currentHour ? (
+        <g>
+          <line
+            x1={x(hovered.hour)}
+            x2={x(hovered.hour)}
+            y1={padT}
+            y2={padT + plotH}
+            stroke="rgba(23,88,100,0.35)"
+            strokeWidth={1}
+          />
+          <circle
+            cx={x(hovered.hour)}
+            cy={y(hovered.users)}
+            r={6}
+            fill="none"
+            stroke="#175864"
+            strokeWidth={2}
+          />
+        </g>
+      ) : null}
+      {points.map((p) => (
+        <rect
+          key={p.hour}
+          x={padL + (p.hour / 24) * plotW}
+          y={padT}
+          width={plotW / 24}
+          height={plotH}
+          fill="transparent"
+          onMouseEnter={() => onHoverHour(p.hour)}
+          onClick={() => onHoverHour(p.hour)}
+        />
+      ))}
+    </svg>
+  );
+}
+
 function StatCard({
   label,
   value,
@@ -82,7 +230,9 @@ export function AdminDashboard() {
   const [activitySeries, setActivitySeries] = useState<'users' | 'opens'>(
     'users',
   );
+  const [activityView, setActivityView] = useState<'30d' | 'today'>('30d');
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+  const [hoveredHour, setHoveredHour] = useState<number | null>(null);
   const [hoveredSignup, setHoveredSignup] = useState<string | null>(null);
   const [hoveredCurveDay, setHoveredCurveDay] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -165,6 +315,17 @@ export function AdminDashboard() {
       stats.activity.byDay.find((d) => d.date === hoveredDay) ?? null
     );
   }, [stats, hoveredDay]);
+
+  // Current UTC hour, from the data's own fetch time so it stays in sync
+  // with the hourly buckets (which are UTC).
+  const currentHourUtc = stats
+    ? new Date(stats.generatedAt).getUTCHours()
+    : new Date().getUTCHours();
+
+  const hoveredHourlyPoint = useMemo(() => {
+    if (!stats || hoveredHour === null) return null;
+    return stats.hourly.points[hoveredHour] ?? null;
+  }, [stats, hoveredHour]);
 
   const hoveredSignupPoint = useMemo(() => {
     if (!stats || !hoveredSignup) return null;
@@ -327,61 +488,105 @@ export function AdminDashboard() {
           <section className={styles.panel}>
             <div className={styles.panelHeaderRow}>
               <div>
-                <h2 className={styles.panelTitle}>Active users · last 30 days</h2>
+                <h2 className={styles.panelTitle}>
+                  {activityView === 'today'
+                    ? 'Active users · today, hour by hour'
+                    : 'Active users · last 30 days'}
+                </h2>
                 <p className={styles.subtitle}>
                   {stats.activity.trackingEnabled
-                    ? `${formatNumber(stats.activity.active30d)} users were active in the last 30 days · ${formatNumber(stats.activity.opens30d)} app opens logged${peakActivity ? ` · peak ${formatDay(peakActivity.date)} with ${formatNumber(peakActivity.value)} ${peakActivity.label}` : ''}`
+                    ? activityView === 'today'
+                      ? `${formatNumber(stats.hourly.totalUsers)} users active today so far${stats.hourly.peakHour !== null ? ` · peak ${formatHour(stats.hourly.peakHour)} UTC with ${formatNumber(stats.hourly.peakUsers)} users` : ''} · hours in UTC`
+                      : `${formatNumber(stats.activity.active30d)} users were active in the last 30 days · ${formatNumber(stats.activity.opens30d)} app opens logged${peakActivity ? ` · peak ${formatDay(peakActivity.date)} with ${formatNumber(peakActivity.value)} ${peakActivity.label}` : ''}`
                     : 'App-open tracking is not available yet — no activity data in Supabase.'}
                 </p>
               </div>
-              <div className={styles.toggle} role="group" aria-label="Chart series">
-                <button
-                  type="button"
-                  className={`${styles.toggleBtn} ${activitySeries === 'users' ? styles.toggleBtnActive : ''}`}
-                  onClick={() => setActivitySeries('users')}
-                >
-                  Active users
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.toggleBtn} ${activitySeries === 'opens' ? styles.toggleBtnActive : ''}`}
-                  onClick={() => setActivitySeries('opens')}
-                >
-                  App opens
-                </button>
-              </div>
+              {activityView === '30d' ? (
+                <div className={styles.toggle} role="group" aria-label="Chart series">
+                  <button
+                    type="button"
+                    className={`${styles.toggleBtn} ${activitySeries === 'users' ? styles.toggleBtnActive : ''}`}
+                    onClick={() => setActivitySeries('users')}
+                  >
+                    Active users
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.toggleBtn} ${activitySeries === 'opens' ? styles.toggleBtnActive : ''}`}
+                    onClick={() => setActivitySeries('opens')}
+                  >
+                    App opens
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            <div
+              className={styles.toggle}
+              role="group"
+              aria-label="Activity view"
+              style={{ marginBottom: '0.6rem' }}
+            >
+              <button
+                type="button"
+                className={`${styles.toggleBtn} ${activityView === '30d' ? styles.toggleBtnActive : ''}`}
+                onClick={() => setActivityView('30d')}
+              >
+                30 days
+              </button>
+              <button
+                type="button"
+                className={`${styles.toggleBtn} ${activityView === 'today' ? styles.toggleBtnActive : ''}`}
+                onClick={() => setActivityView('today')}
+              >
+                Today (hourly)
+              </button>
             </div>
             <p className={styles.chartTip}>
-              {hoveredActivity
-                ? `${formatDay(hoveredActivity.date)} — ${formatNumber(hoveredActivity.activeUsers)} active users · ${formatNumber(hoveredActivity.opens)} opens`
-                : peakActivity
-                  ? `Hover a bar for a day's numbers — peak so far: ${formatDay(peakActivity.date)} (${formatNumber(peakActivity.value)} ${peakActivity.label})`
-                  : 'Hover a bar to see each day.'}
+              {activityView === 'today'
+                ? hoveredHourlyPoint
+                  ? `${formatHour(hoveredHourlyPoint.hour)} UTC — ${formatNumber(hoveredHourlyPoint.users)} active users`
+                  : stats.hourly.peakHour !== null
+                    ? `Hover the line to see each hour — peak so far: ${formatHour(stats.hourly.peakHour)} UTC (${formatNumber(stats.hourly.peakUsers)} users)`
+                    : 'Hover the line to see each hour.'
+                : hoveredActivity
+                  ? `${formatDay(hoveredActivity.date)} — ${formatNumber(hoveredActivity.activeUsers)} active users · ${formatNumber(hoveredActivity.opens)} opens`
+                  : peakActivity
+                    ? `Hover a bar for a day's numbers — peak so far: ${formatDay(peakActivity.date)} (${formatNumber(peakActivity.value)} ${peakActivity.label})`
+                    : 'Hover a bar to see each day.'}
             </p>
-            <div className={styles.chart} onMouseLeave={() => setHoveredDay(null)}>
-              {stats.activity.byDay.map((point) => {
-                const value =
-                  activitySeries === 'users' ? point.activeUsers : point.opens;
-                const isPeak = peakActivity?.date === point.date;
-                return (
-                  <div
-                    key={point.date}
-                    className={styles.barWrap}
-                    onMouseEnter={() => setHoveredDay(point.date)}
-                    onClick={() => setHoveredDay(point.date)}
-                  >
+            {activityView === 'today' ? (
+              <HourlyLineChart
+                points={stats.hourly.points}
+                currentHour={currentHourUtc}
+                hoveredHour={hoveredHour}
+                onHoverHour={setHoveredHour}
+              />
+            ) : (
+              <div className={styles.chart} onMouseLeave={() => setHoveredDay(null)}>
+                {stats.activity.byDay.map((point) => {
+                  const value =
+                    activitySeries === 'users' ? point.activeUsers : point.opens;
+                  const isPeak = peakActivity?.date === point.date;
+                  return (
                     <div
-                      className={`${styles.bar} ${isPeak ? styles.barPeak : ''} ${hoveredDay === point.date ? styles.barHovered : ''}`}
-                      style={{
-                        height: `${Math.round((value / activityMax) * CHART_BAR_MAX_PX)}px`,
-                      }}
-                      title={`${formatDay(point.date)}: ${formatNumber(point.activeUsers)} users, ${formatNumber(point.opens)} opens`}
-                    />
-                    <span className={styles.barLabel}>{point.date.slice(5)}</span>
-                  </div>
-                );
-              })}
-            </div>
+                      key={point.date}
+                      className={styles.barWrap}
+                      onMouseEnter={() => setHoveredDay(point.date)}
+                      onClick={() => setHoveredDay(point.date)}
+                    >
+                      <div
+                        className={`${styles.bar} ${isPeak ? styles.barPeak : ''} ${hoveredDay === point.date ? styles.barHovered : ''}`}
+                        style={{
+                          height: `${Math.round((value / activityMax) * CHART_BAR_MAX_PX)}px`,
+                        }}
+                        title={`${formatDay(point.date)}: ${formatNumber(point.activeUsers)} users, ${formatNumber(point.opens)} opens`}
+                      />
+                      <span className={styles.barLabel}>{point.date.slice(5)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           <section className={styles.panel}>
