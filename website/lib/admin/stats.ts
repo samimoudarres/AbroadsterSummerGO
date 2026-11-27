@@ -40,6 +40,17 @@ export type ActivityStats = {
   trackingEnabled: boolean;
 };
 
+export type HourlyPoint = { hour: number; users: number };
+
+export type HourlyStats = {
+  date: string; // UTC date (YYYY-MM-DD) these hours belong to
+  points: HourlyPoint[]; // 24 points, hour 0-23 UTC
+  totalUsers: number; // distinct users active today (UTC)
+  peakHour: number | null;
+  peakUsers: number;
+  trackingEnabled: boolean;
+};
+
 export type RetentionCell = {
   day: number;
   retained: number;
@@ -83,6 +94,7 @@ export type DashboardStats = {
     topPrograms: RankedRow[];
   };
   activity: ActivityStats;
+  hourly: HourlyStats;
   retention: RetentionStats;
   engagement: {
     trips: number;
@@ -353,6 +365,83 @@ async function fetchActivityStats(): Promise<ActivityStats> {
   }
 }
 
+function emptyHourlyStats(date: string): HourlyStats {
+  return {
+    date,
+    points: Array.from({ length: 24 }, (_, hour) => ({ hour, users: 0 })),
+    totalUsers: 0,
+    peakHour: null,
+    peakUsers: 0,
+    trackingEnabled: false,
+  };
+}
+
+/**
+ * Hour-by-hour active users for today (UTC), from user_activity_events.
+ * Same "active" definition as the daily stats: a user counts in an hour
+ * when ANY activity was recorded in that hour. Hours are UTC, matching
+ * the dashboard's UTC-day convention; future hours read 0. Never
+ * throws: if activity tracking is unavailable the intraday view loads
+ * with zeroed points.
+ */
+async function fetchHourlyActivityStats(): Promise<HourlyStats> {
+  const todayKey = dayKey(new Date().toISOString());
+  try {
+    const admin = getSupabaseAdmin();
+    const sinceToday = isoDaysAgo(0);
+    // Paginate: the client caps a single select at 1,000 rows.
+    const rows: { user_id: string; created_at: string }[] = [];
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await admin
+        .from('user_activity_events')
+        .select('user_id, created_at')
+        .gte('created_at', sinceToday)
+        .order('created_at', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) {
+        if (isMissingActivityTable(error)) return emptyHourlyStats(todayKey);
+        throw error;
+      }
+      rows.push(...(data ?? []));
+      if ((data ?? []).length < pageSize) break;
+    }
+
+    const perHour: Set<string>[] = Array.from(
+      { length: 24 },
+      () => new Set<string>(),
+    );
+    const allUsers = new Set<string>();
+    for (const row of rows) {
+      const hour = new Date(row.created_at).getUTCHours();
+      perHour[hour].add(row.user_id);
+      allUsers.add(row.user_id);
+    }
+
+    const points = perHour.map((users, hour) => ({ hour, users: users.size }));
+    let peakHour: number | null = null;
+    let peakUsers = 0;
+    for (const point of points) {
+      if (point.users > peakUsers) {
+        peakUsers = point.users;
+        peakHour = point.hour;
+      }
+    }
+    if (peakUsers === 0) peakHour = null;
+
+    return {
+      date: todayKey,
+      points,
+      totalUsers: allUsers.size,
+      peakHour,
+      peakUsers,
+      trackingEnabled: true,
+    };
+  } catch {
+    return emptyHourlyStats(todayKey);
+  }
+}
+
 function emptyRetentionStats(): RetentionStats {
   const emptyCell = (day: number): RetentionCell => ({
     day,
@@ -565,6 +654,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     openReports,
     recentReports,
     activity,
+    hourly,
     retention,
   ] = await Promise.all([
     countRows('profiles'),
@@ -599,6 +689,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
       .order('created_at', { ascending: false })
       .limit(8),
     fetchActivityStats(),
+    fetchHourlyActivityStats(),
     fetchRetentionStats(),
   ]);
 
@@ -627,6 +718,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
       topPrograms: rankField(programRows.data ?? [], 'study_abroad_program'),
     },
     activity,
+    hourly,
     retention,
     engagement: {
       trips,
